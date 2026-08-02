@@ -93,8 +93,13 @@ export function mergeSnapshot(snapshot: SyncSnapshot, current: SiteSettings): Pa
   };
 }
 
-function toIso(value?: string | null): string {
-  return value || new Date().toISOString();
+function latestIso(values: Array<string | null | undefined>): string {
+  const times = values
+    .filter((v): v is string => Boolean(v))
+    .map((v) => new Date(v).getTime())
+    .filter((n) => Number.isFinite(n));
+  if (!times.length) return new Date().toISOString();
+  return new Date(Math.max(...times)).toISOString();
 }
 
 async function loadCanonicalSettingsRow(): Promise<SiteSettingsRow | null> {
@@ -158,20 +163,30 @@ export async function loadSharedSnapshot(): Promise<SyncSnapshot | null> {
         : ((tiersResult.data as OwnershipTierRow[] | null | undefined)?.map((row) => row.data) || [])),
   } as SiteSettings;
 
+  const propertyRows = (propertiesResult.data as PropertyRow[] | null | undefined) || [];
+  const leadRows = (leadsResult.data as LeadRow[] | null | undefined) || [];
+  const reviewRows = (reviewsResult.data as ReviewRow[] | null | undefined) || [];
+  const latestUpdatedAt = latestIso([
+    settingsResult.updated_at,
+    ...propertyRows.flatMap((row) => [row.updated_at, row.created_at]),
+    ...leadRows.map((row) => row.created_at),
+    ...reviewRows.map((row) => row.created_at),
+  ]);
+
   return {
     version: 1,
-    updatedAt: toIso(settingsResult.updated_at),
-    properties: (propertiesResult.data as PropertyRow[] | null | undefined)?.map((row) => ({
+    updatedAt: latestUpdatedAt,
+    properties: propertyRows.map((row) => ({
       ...row.data,
       id: row.id,
-    })) || [],
-    leads: (leadsResult.data as LeadRow[] | null | undefined)?.map((row) => ({
+    })),
+    leads: leadRows.map((row) => ({
       ...row.data,
       id: row.id,
       status: row.status || row.data.status,
       createdAt: row.created_at || row.data.createdAt || new Date().toISOString(),
-    })) || [],
-    reviews: (reviewsResult.data as ReviewRow[] | null | undefined)?.map((row) => ({
+    })),
+    reviews: reviewRows.map((row) => ({
       id: row.id,
       name: row.name,
       location: row.location || undefined,
@@ -179,7 +194,7 @@ export async function loadSharedSnapshot(): Promise<SyncSnapshot | null> {
       quote: row.quote,
       approved: row.approved,
       createdAt: row.created_at || new Date().toISOString(),
-    })) || [],
+    })),
     settings,
   };
 }

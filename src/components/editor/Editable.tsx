@@ -129,7 +129,8 @@ export function EditableImage({
           label={alt || field}
           presets={presets}
           onSelect={(url) => {
-            setPending(`img:${field}`, url);
+            const normalized = field.startsWith("img:") ? field.slice(4) : field;
+            setPending(`img:${normalized}`, url);
             setPickerOpen(false);
           }}
           onClose={() => setPickerOpen(false)}
