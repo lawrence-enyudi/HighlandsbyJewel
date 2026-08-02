@@ -63,6 +63,34 @@ static hosting.
 
 ---
 
+## Supabase Setup
+
+You can connect this project to Supabase even before creating tables.
+
+1. Local environment:
+   - Create `.env.local` in the project root.
+   - Add:
+   ```env
+   VITE_SUPABASE_URL=https://xsbdkopjkcmhbghefxiw.supabase.co
+   VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
+   ```
+2. Vercel environment variables:
+   - In Vercel Project Settings -> Environment Variables, add the same two keys:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_PUBLISHABLE_KEY`
+3. Restart local dev server after changing env vars.
+4. Run `npm run dev` and check browser console for:
+   - `Supabase is connected and reachable.`
+
+### Notes
+
+- This Vite project uses `VITE_` prefix (not `NEXT_PUBLIC_`).
+- Supabase client is initialized in `src/lib/supabase.ts`.
+- A startup health check runs in development from `src/utils/supabaseHealth.ts`.
+- You can start adding tables later in Supabase SQL Editor without changing the connection setup.
+
+---
+
 ## 📦 Tech
 
 - React 19 + TypeScript + Vite + Tailwind CSS v4
