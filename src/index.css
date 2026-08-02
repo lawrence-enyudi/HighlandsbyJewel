@@ -1,0 +1,280 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+
+  /* Deep pine forest — the dominant highlands green (dusk lodge tones) */
+  --color-highlands-950: #052019;
+  --color-highlands-900: #0a3527;
+  --color-highlands-800: #0f4a34;
+  --color-highlands-700: #156244;
+  --color-highlands-600: #1d7d56;
+  --color-highlands-500: #27996b;
+  --color-highlands-100: #cdeadd;
+  --color-highlands-50: #e7f5ee;
+
+  /* Taal lake & morning mist — cool slate-teal for text and depth */
+  --color-pine-900: #122b28;
+  --color-pine-800: #1d3d39;
+  --color-pine-700: #2e524c;
+  --color-pine-600: #44685f;
+  --color-pine-100: #d8e7e2;
+  --color-pine-50: #eef5f2;
+
+  /* Lake water — a cool blue-teal accent family */
+  --color-lake-900: #0d2f38;
+  --color-lake-800: #144651;
+  --color-lake-700: #1c5e6b;
+  --color-lake-600: #267987;
+  --color-lake-500: #3395a3;
+  --color-lake-100: #d3ecef;
+  --color-lake-50: #ebf6f8;
+
+  /* Sunrise brass over the ridge — warm, saturated gold */
+  --color-gold-800: #7a4e10;
+  --color-gold-700: #96621a;
+  --color-gold-600: #b47a20;
+  --color-gold-500: #d1922b;
+  --color-gold-400: #e5aa3d;
+  --color-gold-300: #f2c468;
+  --color-gold-200: #f9dba0;
+  --color-gold-100: #fcedcb;
+  --color-gold-50: #fef8ea;
+
+  /* Cool mountain mist — light section surfaces (not cream/beige) */
+  --color-cream-900: #1c2f2b;
+  --color-cream-800: #2a423c;
+  --color-cream-700: #3c574f;
+  --color-cream-600: #587469;
+  --color-cream-200: #d9e8e1;
+  --color-cream-100: #e9f3ee;
+  --color-cream-50: #f4faf7;
+
+  /* Legacy ivory tokens mapped onto the new mist so nothing breaks */
+  --color-ivory-50: #f6fbf8;
+  --color-ivory-100: #e9f3ee;
+  --color-ivory-200: #d9e8e1;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: #f2f8f5;
+    background-image:
+      radial-gradient(60rem 40rem at 110% -10%, rgba(38, 121, 135, 0.10), transparent 60%),
+      radial-gradient(50rem 34rem at -20% 12%, rgba(29, 125, 86, 0.09), transparent 55%),
+      radial-gradient(44rem 30rem at 55% 118%, rgba(209, 146, 43, 0.07), transparent 60%);
+    background-attachment: fixed;
+    color: #122b28;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background: #d1922b;
+    color: #052019;
+  }
+
+  :focus-visible {
+    outline: 2px solid #b47a20;
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #e7f1ec;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #1d7d56, #267987);
+    border-radius: 999px;
+    border: 2px solid #e7f1ec;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #0f4a34;
+  }
+}
+
+@utility text-balance {
+  text-wrap: balance;
+}
+
+/* ---------- Motion ---------- */
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0) translateX(0);
+  }
+  50% {
+    transform: translateY(-14px) translateX(5px);
+  }
+}
+
+@keyframes drift {
+  0% {
+    transform: translate3d(-3%, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(3%, -2%, 0) scale(1.06);
+  }
+  100% {
+    transform: translate3d(-3%, 0, 0) scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+  70% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-down {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-floaty {
+  animation: floaty 8s ease-in-out infinite;
+}
+.animate-drift {
+  animation: drift 24s ease-in-out infinite;
+}
+.animate-marquee {
+  animation: marquee 35s linear infinite;
+}
+.animate-fade-down {
+  animation: fade-down 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-scale-in {
+  animation: scale-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Brass glint with a whisper of lake-teal — reads as sunrise over water */
+.shimmer-text {
+  background: linear-gradient(
+    100deg,
+    #96621a 8%,
+    #d1922b 30%,
+    #f6d78c 48%,
+    #7fb7bd 60%,
+    #b47a20 78%,
+    #96621a 95%
+  );
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 6.5s linear infinite;
+}
+
+/* Scroll reveal */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+}
+
+.glass-light {
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid rgba(10, 53, 39, 0.08);
+}
+
+.glass-card {
+  background: #ffffff;
+  border: 1px solid rgba(10, 53, 39, 0.1);
+  box-shadow:
+    0 12px 34px -12px rgba(5, 32, 25, 0.12),
+    0 1px 3px rgba(5, 32, 25, 0.05);
+}
+
+/* Pine-to-lake ridge line */
+.hairline {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(29, 125, 86, 0.55),
+    rgba(209, 146, 43, 0.65),
+    rgba(38, 121, 135, 0.5),
+    transparent
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+}
