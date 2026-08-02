@@ -1,116 +1,94 @@
-import type { SiteSettings, Property, SiteTrippingLead } from "@/context/SiteContext";
+import { supabase } from "@/lib/supabase";
+import type { Property, SiteReview, SiteSettings, SiteTrippingLead } from "@/context/SiteContext";
 
-/**
- * Public bin ID used by ALL VISITORS to hydrate the latest published edits.
- * Leave "" if you don't use the visitor-live feature. See Seller's Portal →
- * Cloud Backup & Restore tab for instructions.
- */
-export const PUBLIC_BIN_ID = "";
+export const SITE_STATE_ID = "tagaytay-highlands-by-jewel";
+export const SITE_STATE_TABLE = "site_state";
 
 export type CloudConfig = {
-  enabled: boolean;
-  apiKey: string;
-  binId: string;
+  enabled?: boolean;
+  apiKey?: string;
+  binId?: string;
 };
 
-/**
- * Payload stored in the cloud. Sensitive fields (adminPin, cloud config,
- * API keys) are intentionally EXCLUDED.
- */
-export type SyncPayload = {
+export type SyncSnapshot = {
   version: number;
   updatedAt: string;
   properties: Property[];
   leads: SiteTrippingLead[];
-  contentOverrides: Record<string, string>;
-  imageOverrides: Record<string, string>;
-  settings: Omit<SiteSettings, "adminPin" | "cloudSync">;
+  reviews: SiteReview[];
+  settings: SiteSettings;
 };
 
-const API = "https://api.jsonbin.io/v3/b";
+export type SiteStateRow = SyncSnapshot & {
+  id: string;
+  updated_at?: string;
+};
 
-function headers(apiKey?: string): Record<string, string> {
-  const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (apiKey) h["X-Master-Key"] = apiKey;
-  return h;
-}
-
-export async function createBin(apiKey: string, payload: SyncPayload): Promise<string> {
-  const res = await fetch(API, {
-    method: "POST",
-    headers: headers(apiKey),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error(`Create bin failed (${res.status})`);
-  const data = await res.json();
-  return data.metadata?.id as string;
-}
-
-export async function updateBin(apiKey: string, binId: string, payload: SyncPayload): Promise<void> {
-  const res = await fetch(`${API}/${binId}`, {
-    method: "PUT",
-    headers: headers(apiKey),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error(`Update bin failed (${res.status})`);
-}
-
-/** Read the bin — works with a public bin (no key) or with the master key. */
-export async function readBin(binId: string, apiKey?: string): Promise<SyncPayload | null> {
-  const attempts: Array<{ name: string; key?: string }> = [
-    { name: "public", key: undefined },
-    ...(apiKey ? [{ name: "key", key: apiKey }] : []),
-  ];
-  for (const a of attempts) {
-    try {
-      const res = await fetch(`${API}/${binId}/latest`, { headers: headers(a.key) });
-      if (!res.ok) continue;
-      const data = await res.json();
-      const record = data?.record as SyncPayload | undefined;
-      if (record && record.version) return record;
-    } catch {
-      // try next
-    }
-  }
-  return null;
-}
-
-export function buildPayload(
+export function buildSnapshot(
   properties: Property[],
   settings: SiteSettings,
   leads: SiteTrippingLead[],
-): SyncPayload {
-  const { adminPin: _adminPin, cloudSync: _cloud, ...restSettings } = settings;
+  reviews: SiteReview[],
+): SyncSnapshot {
   return {
     version: 1,
     updatedAt: new Date().toISOString(),
     properties,
     leads,
-    contentOverrides: settings.contentOverrides || {},
-    imageOverrides: settings.imageOverrides || {},
-    settings: restSettings,
+    reviews,
+    settings,
   };
 }
 
-export function mergePayload(
-  payload: SyncPayload,
-  current: SiteSettings,
-): Partial<SiteSettings> {
+export function mergeSnapshot(snapshot: SyncSnapshot, current: SiteSettings): Partial<SiteSettings> {
   return {
-    ...payload.settings,
-    contentOverrides: payload.contentOverrides || {},
-    imageOverrides: payload.imageOverrides || {},
-    // Preserve sensitive local-only fields
-    adminPin: current.adminPin,
+    ...snapshot.settings,
+    contentOverrides: snapshot.settings.contentOverrides || {},
+    imageOverrides: snapshot.settings.imageOverrides || {},
+    adminPin: snapshot.settings.adminPin || current.adminPin,
   };
 }
 
-/** Estimate JSON size to stay under the JSONBin free-tier 100KB limit. */
-export function payloadSize(payload: SyncPayload): number {
+export async function loadSharedSnapshot(): Promise<SyncSnapshot | null> {
+  const { data, error } = await supabase
+    .from(SITE_STATE_TABLE)
+    .select("id, version, updated_at, properties, leads, reviews, settings")
+    .eq("id", SITE_STATE_ID)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return {
+    version: data.version,
+    updatedAt: data.updated_at || new Date().toISOString(),
+    properties: data.properties,
+    leads: data.leads,
+    reviews: data.reviews,
+    settings: data.settings,
+  };
+}
+
+export async function saveSharedSnapshot(snapshot: SyncSnapshot): Promise<void> {
+  const row: SiteStateRow = {
+    id: SITE_STATE_ID,
+    updated_at: snapshot.updatedAt,
+    ...snapshot,
+  };
+
+  const { error } = await supabase.from(SITE_STATE_TABLE).upsert(row, { onConflict: "id" });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export function snapshotSize(snapshot: SyncSnapshot): number {
   try {
-    return new Blob([JSON.stringify(payload)]).size;
+    return new Blob([JSON.stringify(snapshot)]).size;
   } catch {
-    return JSON.stringify(payload).length;
+    return JSON.stringify(snapshot).length;
   }
 }
 

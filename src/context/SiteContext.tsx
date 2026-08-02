@@ -7,13 +7,11 @@ import {
   type ReactNode,
 } from "react";
 import {
-  buildPayload,
-  mergePayload,
-  readBin,
-  createBin,
-  updateBin,
-  payloadSize,
-  PUBLIC_BIN_ID,
+  buildSnapshot,
+  mergeSnapshot,
+  loadSharedSnapshot,
+  saveSharedSnapshot,
+  snapshotSize,
   type CloudConfig,
 } from "@/utils/cloudSync";
 
@@ -797,6 +795,48 @@ export function SiteProvider({ children }: { children: ReactNode }) {
 
   const pushTimer = useRef<number | null>(null);
   const hydratingRef = useRef(false);
+  const lastRemoteUpdatedAtRef = useRef<string | null>(null);
+
+  const applyRemoteSnapshot = (snapshot: Awaited<ReturnType<typeof loadSharedSnapshot>>) => {
+    if (!snapshot) return;
+    hydratingRef.current = true;
+    setProperties(snapshot.properties || INITIAL_PROPERTIES);
+    setLeads(snapshot.leads || INITIAL_LEADS);
+    setReviews(snapshot.reviews || INITIAL_REVIEWS);
+    setSettings((prev) => ({ ...prev, ...mergeSnapshot(snapshot, prev) }));
+    lastRemoteUpdatedAtRef.current = snapshot.updatedAt;
+    setLastSyncedAt(snapshot.updatedAt);
+    window.setTimeout(() => {
+      hydratingRef.current = false;
+    }, 800);
+  };
+
+  const pushSharedState = async (): Promise<{ ok: boolean; message: string }> => {
+    if (hydratingRef.current) {
+      return { ok: false, message: "Hydrating shared state, try again in a moment." };
+    }
+    setSyncState("syncing");
+    try {
+      const snapshot = buildSnapshot(properties, settings, leads, reviews);
+      if (snapshotSize(snapshot) > 4_500_000) {
+        const message =
+          "Shared state is too large to store comfortably in Supabase. Reduce embedded image data or move uploads to Supabase Storage.";
+        setSyncState("error");
+        return { ok: false, message };
+      }
+      await saveSharedSnapshot(snapshot);
+      lastRemoteUpdatedAtRef.current = snapshot.updatedAt;
+      setLastSyncedAt(snapshot.updatedAt);
+      setSyncState("idle");
+      return { ok: true, message: "Synced to Supabase successfully." };
+    } catch {
+      setSyncState("error");
+      return {
+        ok: false,
+        message: "Supabase sync failed. Check your table name, row policies, and env vars.",
+      };
+    }
+  };
 
   // Persist cloud config locally
   useEffect(() => {
@@ -820,65 +860,66 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify(reviews));
   }, [reviews]);
 
-  // Auto-push to cloud (debounced) whenever content changes and sync is enabled
+  // Auto-push to Supabase (debounced) whenever content changes.
   useEffect(() => {
-    if (!cloudConfig.enabled || hydratingRef.current) return;
+    if (hydratingRef.current) return;
     if (pushTimer.current) window.clearTimeout(pushTimer.current);
     pushTimer.current = window.setTimeout(() => {
-      void (async () => {
-        setSyncState("syncing");
-        try {
-          const payload = buildPayload(properties, settings, leads);
-          if (payloadSize(payload) > 95_000) {
-            // Too large for free JSONBin — still fine locally; user can use Export/Import
-            setSyncState("idle");
-            return;
-          }
-          if (!cloudConfig.apiKey) {
-            setSyncState("error");
-            return;
-          }
-          if (cloudConfig.binId) {
-            await updateBin(cloudConfig.apiKey, cloudConfig.binId, payload);
-          } else {
-            const id = await createBin(cloudConfig.apiKey, payload);
-            setCloudConfig((c) => ({ ...c, binId: id }));
-          }
-          setLastSyncedAt(new Date().toISOString());
-          setSyncState("idle");
-        } catch {
-          setSyncState("error");
-        }
-      })();
+      void pushSharedState();
     }, 1200);
     return () => {
       if (pushTimer.current) window.clearTimeout(pushTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [properties, settings, leads, cloudConfig.enabled, cloudConfig.apiKey, cloudConfig.binId]);
+  }, [properties, settings, leads, reviews]);
 
-  // On mount: hydrate from the PUBLIC bin so every visitor sees published edits
+  // On mount: hydrate from the shared Supabase row, then keep polling for newer edits.
   useEffect(() => {
-    const publicBin = (PUBLIC_BIN_ID || cloudConfig.binId || "").trim();
-    if (!publicBin) return;
     hydratingRef.current = true;
+    let cancelled = false;
     void (async () => {
       try {
-        const payload = await readBin(publicBin, cloudConfig.apiKey || undefined);
-        if (payload) {
-          setProperties(payload.properties || INITIAL_PROPERTIES);
-          setLeads(payload.leads || INITIAL_LEADS);
-          setSettings((prev) => ({ ...prev, ...mergePayload(payload, prev) }));
+        const snapshot = await loadSharedSnapshot();
+        if (snapshot && !cancelled) {
+          applyRemoteSnapshot(snapshot);
+        } else {
+          window.setTimeout(() => {
+            if (!cancelled) {
+              hydratingRef.current = false;
+              void pushSharedState();
+            }
+          }, 600);
         }
       } catch {
-        // ignore — fall back to bundled + local data
+        window.setTimeout(() => {
+          if (!cancelled) {
+            hydratingRef.current = false;
+          }
+        }, 600);
       } finally {
-        setTimeout(() => {
-          hydratingRef.current = false;
-        }, 800);
+        // keep the flag until the hydration window closes
       }
     })();
+
+    const pollTimer = window.setInterval(() => {
+      if (hydratingRef.current) return;
+      void (async () => {
+        try {
+          const snapshot = await loadSharedSnapshot();
+          if (snapshot && snapshot.updatedAt !== lastRemoteUpdatedAtRef.current) {
+            applyRemoteSnapshot(snapshot);
+          }
+        } catch {
+          // ignore poll failures; local edits still persist
+        }
+      })();
+    }, 10000);
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true;
+      window.clearInterval(pollTimer);
+    };
   }, []);
 
   // Secret URL Hash & Keyboard shortcut listener for Seller's Portal
@@ -1045,37 +1086,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
   };
 
   const syncNow = async (): Promise<{ ok: boolean; message: string }> => {
-    if (!cloudConfig.apiKey) {
-      return { ok: false, message: "Enter your JSONBin API key first (see Cloud Backup tab)." };
-    }
-    setSyncState("syncing");
-    try {
-      const payload = buildPayload(properties, settings, leads);
-      const size = payloadSize(payload);
-      if (size > 95_000) {
-        setSyncState("error");
-        return {
-          ok: false,
-          message:
-            "Cloud record is too large for the free JSONBin tier (photos make it big). Use 'Download Backup File' for full backups instead.",
-        };
-      }
-      if (cloudConfig.binId) {
-        await updateBin(cloudConfig.apiKey, cloudConfig.binId, payload);
-      } else {
-        const id = await createBin(cloudConfig.apiKey, payload);
-        setCloudConfig((c) => ({ ...c, binId: id }));
-      }
-      setLastSyncedAt(new Date().toISOString());
-      setSyncState("idle");
-      return { ok: true, message: "Synced to cloud successfully." };
-    } catch (err) {
-      setSyncState("error");
-      return {
-        ok: false,
-        message: `Sync failed: ${err instanceof Error ? err.message : "unknown error"}`,
-      };
-    }
+    return pushSharedState();
   };
 
   const exportBackup = () => {

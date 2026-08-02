@@ -30,23 +30,28 @@ or by adding **`#admin`** to the URL.
    - **Download Backup File** — one-click JSON backup of EVERYTHING (listings, photos,
      promos, leads, all custom text). Keep it safe in Google Drive / WhatsApp.
    - **Restore from File** — load that backup on any device.
-   - **Free Cloud Sync (JSONBin.io)** — optional: paste a free API key and your content is
-     automatically pushed to a private cloud bin every time you save an edit, then pull it
-     on any other device with the same key.
+    - **Supabase Shared Sync** — the app now saves shared content to a Supabase table so
+       changes can appear on other devices automatically.
 
 ### Want visitors to see your edits instantly? (Optional, one-time setup)
 Your deployed site is static, so visitors normally see the content that was in the code at
-deploy time. To make edits **live for every visitor**:
+deploy time. To make edits **live for every visitor** via Supabase:
 
-1. Enable **Cloud Backup & Restore** in the Seller's Portal, press **Sync Now**, and make
-   your bin **public** on jsonbin.io (Bin → Access → Public).
-2. Copy your **Bin ID** and paste it into `src/utils/cloudSync.ts`:
-   ```ts
-   export const PUBLIC_BIN_ID = "your_public_bin_id_here";
-   ```
-3. Commit & redeploy **once**.
-4. From then on, every visitor's browser automatically loads the latest published content
-   from that bin, and your **Sync Now** button pushes new edits to everyone instantly.
+1. In Supabase, create a table named `site_state` with these columns:
+   - `id` text primary key
+   - `version` int
+   - `updated_at` timestamptz
+   - `properties` jsonb
+   - `leads` jsonb
+   - `reviews` jsonb
+   - `settings` jsonb
+2. In the table, allow the app to read and upsert the shared row that uses the id
+   `tagaytay-highlands-by-jewel`.
+3. Set these Vite env vars in Vercel and locally:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_PUBLISHABLE_KEY`
+4. Press **Sync Now** in the Seller's Portal once, then keep the app open on the other
+   device. It will poll Supabase and pull the latest shared content.
 
 ---
 
@@ -85,8 +90,9 @@ You can connect this project to Supabase even before creating tables.
 ### Notes
 
 - This Vite project uses `VITE_` prefix (not `NEXT_PUBLIC_`).
-- Supabase client is initialized in `src/lib/supabase.ts`.
-- A startup health check runs in development from `src/utils/supabaseHealth.ts`.
+- Supabase client is initialized in [src/lib/supabase.ts](src/lib/supabase.ts).
+- Shared state sync lives in [src/utils/cloudSync.ts](src/utils/cloudSync.ts).
+- A startup health check runs in development from [src/utils/supabaseHealth.ts](src/utils/supabaseHealth.ts).
 - You can start adding tables later in Supabase SQL Editor without changing the connection setup.
 
 ---
@@ -97,7 +103,7 @@ You can connect this project to Supabase even before creating tables.
 - `lucide-react` icons
 - Google Fonts: Fraunces (display) + Inter (body)
 - Single-file build via `vite-plugin-singlefile` (deploys as one `index.html`)
-- Persistence: `localStorage` + optional JSONBin.io cloud sync + JSON export/import
+- Persistence: `localStorage` + Supabase shared sync + JSON export/import
 
 ## ⚠️ Privacy note
 The admin PINs listed above are **demo defaults**. Change the Seller's Portal PIN before

@@ -231,8 +231,6 @@ export default function AdminPortal() {
     deleteReview,
     toggleReviewApproval,
     resetAllToDefault,
-    cloudConfig,
-    updateCloudConfig,
     syncNow,
     exportBackup,
     importBackup,
@@ -1854,12 +1852,10 @@ export default function AdminPortal() {
                         )}
                         <span className="text-sm font-bold text-highlands-900">
                           {syncState === "syncing"
-                            ? "Syncing..."
+                            ? "Syncing to Supabase..."
                             : syncState === "error"
                               ? "Last sync failed"
-                              : cloudConfig.enabled
-                                ? "Cloud sync is ON"
-                                : "Cloud sync is OFF"}
+                              : "Supabase sync is ON"}
                         </span>
                       </div>
                       {lastSyncedAt && (
@@ -1903,72 +1899,22 @@ export default function AdminPortal() {
                     </div>
                   </div>
 
-                  {/* JSONBin config */}
-                  <div className="rounded-2xl border border-highlands-900/10 bg-cream-50/60 p-5 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Cloud className="h-4 w-4 text-gold-700" />
-                        <h3 className="text-sm font-bold text-highlands-900">
-                          Free Cloud Backup (JSONBin.io)
-                        </h3>
-                      </div>
-                      <label className="relative inline-flex cursor-pointer items-center">
-                        <input
-                          type="checkbox"
-                          checked={cloudConfig.enabled}
-                          onChange={(e) => updateCloudConfig({ enabled: e.target.checked })}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-highlands-900/15 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-highlands-600 peer-checked:to-gold-600"></div>
-                      </label>
+                  <div className="rounded-2xl border border-highlands-900/10 bg-cream-50/60 p-5 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Cloud className="h-4 w-4 text-gold-700" />
+                      <h3 className="text-sm font-bold text-highlands-900">Supabase shared sync</h3>
                     </div>
 
                     <p className="text-[11.5px] leading-relaxed text-pine-600">
-                      <strong className="text-highlands-900">1.</strong> Create a free account at{" "}
-                      <span className="font-semibold text-gold-700">jsonbin.io</span> and copy your{" "}
-                      <em>X-Master-Key</em> (API key).
-                      <br />
-                      <strong className="text-highlands-900">2.</strong> Paste it below, toggle sync
-                      ON, then press <em>Sync Now</em>. A private bin is created automatically and
-                      your website content is backed up every time you save an edit.
-                      <br />
-                      <strong className="text-highlands-900">3.</strong> On a new device, enter the
-                      same API key + Bin ID (shown after first sync) and press <em>Sync Now</em> to
-                      pull your content.
+                      This portal now saves shared content to a Supabase table instead of the old bin-based sync.
+                      When you change listings, leads, reviews, or content here, other devices will
+                      pick it up automatically on the next sync poll.
                     </p>
 
-                    <div>
-                      <label className="text-xs font-bold text-highlands-900 uppercase">
-                        JSONBin API Key (X-Master-Key)
-                      </label>
-                      <input
-                        type="password"
-                        value={cloudConfig.apiKey}
-                        onChange={(e) => updateCloudConfig({ apiKey: e.target.value })}
-                        placeholder="Paste your JSONBin API key"
-                        className="mt-1.5 w-full rounded-xl border border-highlands-900/15 bg-white px-3.5 py-2 text-xs text-highlands-900 focus:border-gold-500 focus:outline-none font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-bold text-highlands-900 uppercase">
-                        Bin ID <span className="text-pine-600 normal-case font-normal">(auto-filled after first sync)</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={cloudConfig.binId}
-                        onChange={(e) => updateCloudConfig({ binId: e.target.value })}
-                        placeholder="e.g. 65ab12cd..." 
-                        className="mt-1.5 w-full rounded-xl border border-highlands-900/15 bg-white px-3.5 py-2 text-xs text-highlands-900 focus:border-gold-500 focus:outline-none font-mono"
-                      />
-                    </div>
-
                     <p className="text-[11px] text-pine-600 leading-relaxed">
-                      💡 <strong className="text-highlands-900">Note:</strong> Free JSONBin records
-                      are limited to ~100 KB. Text, prices, promos, and photo links sync perfectly.
-                      If you upload many large photos, use the{" "}
-                      <strong className="text-highlands-900">Download Backup File</strong> as your
-                      reliable full backup.
+                      💡 <strong className="text-highlands-900">Note:</strong> if you store large
+                      embedded photos as base64 data, Supabase can still fill up faster than plain
+                      text. Best practice is to keep photo URLs or move uploads to Supabase Storage.
                     </p>
                   </div>
                 </div>
