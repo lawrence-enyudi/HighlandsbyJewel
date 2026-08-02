@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSite } from "@/context/SiteContext";
 import { cn } from "@/utils/cn";
-import { CalendarCheck, Phone } from "lucide-react";
+import { Phone } from "lucide-react";
 
 const links = [
   { label: "Properties", href: "#properties" },
@@ -52,7 +52,7 @@ export function Logo({ className, dark = false }: { className?: string; dark?: b
 }
 
 export default function Navbar() {
-  const { openSiteTrippingModal, settings } = useSite();
+  const { settings } = useSite();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -94,7 +94,7 @@ export default function Navbar() {
         >
           <Logo />
 
-          <ul className="hidden items-center gap-1 lg:flex">
+          <ul className="hidden items-center gap-2 lg:flex">
             {links.map((l) => (
               <li key={l.href}>
                 <a
@@ -116,16 +116,6 @@ export default function Navbar() {
               <Phone className="h-3.5 w-3.5 text-gold-600" />
               <span>{settings.phone}</span>
             </a>
-
-            <button
-              type="button"
-              onClick={() => openSiteTrippingModal()}
-              className="group relative hidden overflow-hidden rounded-full bg-gradient-to-b from-gold-400 via-gold-500 to-gold-600 px-5 py-2.5 text-[13px] font-semibold text-highlands-950 shadow-[0_4px_16px_-4px_rgba(184,134,40,0.5)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-4px_rgba(184,134,40,0.7)] sm:inline-flex sm:items-center sm:gap-2"
-            >
-              <CalendarCheck className="h-3.5 w-3.5 text-highlands-950" />
-              <span className="relative z-10">Book VIP Site Tripping</span>
-              <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-            </button>
 
             <button
               type="button"
@@ -191,17 +181,6 @@ export default function Navbar() {
             </li>
           ))}
         </ul>
-
-        <button
-          type="button"
-          onClick={() => {
-            setOpen(false);
-            openSiteTrippingModal();
-          }}
-          className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-b from-gold-400 to-gold-600 py-3.5 text-center text-sm font-semibold text-highlands-950 shadow-md"
-        >
-          <CalendarCheck className="h-4 w-4" /> Book Free Site Tripping
-        </button>
 
         <div className="mt-6 flex items-center justify-between border-t border-highlands-900/8 pt-4 text-xs text-pine-600">
           <span>{settings.specialistName} · Property Specialist</span>
