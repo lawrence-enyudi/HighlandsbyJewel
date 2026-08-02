@@ -30,23 +30,20 @@ or by adding **`#admin`** to the URL.
    - **Download Backup File** — one-click JSON backup of EVERYTHING (listings, photos,
      promos, leads, all custom text). Keep it safe in Google Drive / WhatsApp.
    - **Restore from File** — load that backup on any device.
-    - **Supabase Shared Sync** — the app now saves shared content to a Supabase table so
-       changes can appear on other devices automatically.
+      - **Supabase Shared Sync** — the app now saves shared content to your existing Supabase
+         tables so changes can appear on other devices automatically.
 
 ### Want visitors to see your edits instantly? (Optional, one-time setup)
 Your deployed site is static, so visitors normally see the content that was in the code at
 deploy time. To make edits **live for every visitor** via Supabase:
 
-1. In Supabase, create a table named `site_state` with these columns:
-   - `id` text primary key
-   - `version` int
-   - `updated_at` timestamptz
-   - `properties` jsonb
-   - `leads` jsonb
-   - `reviews` jsonb
-   - `settings` jsonb
-2. In the table, allow the app to read and upsert the shared row that uses the id
-   `tagaytay-highlands-by-jewel`.
+1. Use your existing Supabase tables for shared content:
+   - `site_settings`
+   - `properties`
+   - `leads`
+   - `reviews`
+   - `ownership_tiers`
+2. Make sure the app can read, insert, update, and delete rows in those tables.
 3. Set these Vite env vars in Vercel and locally:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_PUBLISHABLE_KEY`

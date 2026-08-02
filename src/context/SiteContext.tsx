@@ -723,51 +723,17 @@ type SiteContextType = {
 const SiteContext = createContext<SiteContextType | null>(null);
 
 const STORAGE_KEYS = {
-  PROPERTIES: "tagaytay_highlands_jewel_properties",
-  SETTINGS: "tagaytay_highlands_jewel_settings",
-  LEADS: "tagaytay_highlands_jewel_leads",
-  REVIEWS: "tagaytay_highlands_jewel_reviews",
   AUTH: "tagaytay_highlands_jewel_auth",
 };
 
-const CLOUD_KEY = "tagaytay_highlands_jewel_cloud_config";
-
 export function SiteProvider({ children }: { children: ReactNode }) {
-  const [properties, setProperties] = useState<Property[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.PROPERTIES);
-      return saved ? JSON.parse(saved) : INITIAL_PROPERTIES;
-    } catch {
-      return INITIAL_PROPERTIES;
-    }
-  });
+  const [properties, setProperties] = useState<Property[]>(INITIAL_PROPERTIES);
 
-  const [settings, setSettings] = useState<SiteSettings>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-      return saved ? { ...INITIAL_SETTINGS, ...JSON.parse(saved) } : INITIAL_SETTINGS;
-    } catch {
-      return INITIAL_SETTINGS;
-    }
-  });
+  const [settings, setSettings] = useState<SiteSettings>(INITIAL_SETTINGS);
 
-  const [leads, setLeads] = useState<SiteTrippingLead[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.LEADS);
-      return saved ? JSON.parse(saved) : INITIAL_LEADS;
-    } catch {
-      return INITIAL_LEADS;
-    }
-  });
+  const [leads, setLeads] = useState<SiteTrippingLead[]>(INITIAL_LEADS);
 
-  const [reviews, setReviews] = useState<SiteReview[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.REVIEWS);
-      return saved ? JSON.parse(saved) : INITIAL_REVIEWS;
-    } catch {
-      return INITIAL_REVIEWS;
-    }
-  });
+  const [reviews, setReviews] = useState<SiteReview[]>(INITIAL_REVIEWS);
 
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [adminRole, setAdminRole] = useState<AdminRole>(() => {
@@ -779,16 +745,10 @@ export function SiteProvider({ children }: { children: ReactNode }) {
   const [isSiteTrippingModalOpen, setIsSiteTrippingModalOpen] = useState(false);
   const [selectedTrippingProperty, setSelectedTrippingProperty] = useState("");
 
-  // Cloud backup config (kept in local storage, never shipped to the cloud itself)
-  const [cloudConfig, setCloudConfig] = useState<CloudConfig>(() => {
-    try {
-      const saved = localStorage.getItem(CLOUD_KEY);
-      return saved
-        ? { enabled: false, apiKey: "", binId: "", ...JSON.parse(saved) }
-        : { enabled: false, apiKey: "", binId: "" };
-    } catch {
-      return { enabled: false, apiKey: "", binId: "" };
-    }
+  const [cloudConfig, setCloudConfig] = useState<CloudConfig>({
+    enabled: false,
+    apiKey: "",
+    binId: "",
   });
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<"idle" | "syncing" | "error">("idle");
@@ -837,28 +797,6 @@ export function SiteProvider({ children }: { children: ReactNode }) {
       };
     }
   };
-
-  // Persist cloud config locally
-  useEffect(() => {
-    localStorage.setItem(CLOUD_KEY, JSON.stringify(cloudConfig));
-  }, [cloudConfig]);
-
-  // Sync to local storage (permanent — survives refresh & is the source of truth)
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.PROPERTIES, JSON.stringify(properties));
-  }, [properties]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
-  }, [settings]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.LEADS, JSON.stringify(leads));
-  }, [leads]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify(reviews));
-  }, [reviews]);
 
   // Auto-push to Supabase (debounced) whenever content changes.
   useEffect(() => {
@@ -1066,10 +1004,6 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     setSettings(INITIAL_SETTINGS);
     setLeads(INITIAL_LEADS);
     setReviews(INITIAL_REVIEWS);
-    localStorage.removeItem(STORAGE_KEYS.PROPERTIES);
-    localStorage.removeItem(STORAGE_KEYS.SETTINGS);
-    localStorage.removeItem(STORAGE_KEYS.LEADS);
-    localStorage.removeItem(STORAGE_KEYS.REVIEWS);
   };
 
   const openSiteTrippingModal = (prefillCategory?: string) => {

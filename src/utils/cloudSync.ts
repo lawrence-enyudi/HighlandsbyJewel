@@ -1,8 +1,20 @@
 import { supabase } from "@/lib/supabase";
-import type { Property, SiteReview, SiteSettings, SiteTrippingLead } from "@/context/SiteContext";
+import type {
+  OwnershipTier,
+  Property,
+  SiteReview,
+  SiteSettings,
+  SiteTrippingLead,
+} from "@/context/SiteContext";
 
-export const SITE_STATE_ID = "tagaytay-highlands-by-jewel";
-export const SITE_STATE_TABLE = "site_state";
+export const SITE_SETTINGS_TABLE = "site_settings";
+export const PROPERTIES_TABLE = "properties";
+export const LEADS_TABLE = "leads";
+export const REVIEWS_TABLE = "reviews";
+export const OWNERSHIP_TIERS_TABLE = "ownership_tiers";
+
+// Keep a single canonical settings row so every device reads/writes the same record.
+export const SITE_SETTINGS_ROW_ID = "11111111-1111-1111-1111-111111111111";
 
 export type CloudConfig = {
   enabled?: boolean;
@@ -19,9 +31,41 @@ export type SyncSnapshot = {
   settings: SiteSettings;
 };
 
-export type SiteStateRow = SyncSnapshot & {
+type SiteSettingsRow = {
   id: string;
+  data: SiteSettings;
   updated_at?: string;
+};
+
+type PropertyRow = {
+  id: string;
+  data: Property;
+  sort_order?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type LeadRow = {
+  id: string;
+  data: SiteTrippingLead;
+  status?: SiteTrippingLead["status"] | null;
+  created_at?: string | null;
+};
+
+type ReviewRow = {
+  id: string;
+  name: string;
+  location?: string | null;
+  rating: number;
+  quote: string;
+  approved: boolean;
+  created_at?: string | null;
+};
+
+type OwnershipTierRow = {
+  id: string;
+  data: OwnershipTier;
+  sort_order?: number | null;
 };
 
 export function buildSnapshot(
@@ -49,39 +93,200 @@ export function mergeSnapshot(snapshot: SyncSnapshot, current: SiteSettings): Pa
   };
 }
 
-export async function loadSharedSnapshot(): Promise<SyncSnapshot | null> {
-  const { data, error } = await supabase
-    .from(SITE_STATE_TABLE)
-    .select("id, version, updated_at, properties, leads, reviews, settings")
-    .eq("id", SITE_STATE_ID)
+function toIso(value?: string | null): string {
+  return value || new Date().toISOString();
+}
+
+async function loadCanonicalSettingsRow(): Promise<SiteSettingsRow | null> {
+  const directResult = await supabase
+    .from(SITE_SETTINGS_TABLE)
+    .select("id, data, updated_at")
+    .eq("id", SITE_SETTINGS_ROW_ID)
     .maybeSingle();
 
-  if (error || !data) {
+  if (!directResult.error && directResult.data) {
+    return directResult.data as SiteSettingsRow;
+  }
+
+  const fallbackResult = await supabase
+    .from(SITE_SETTINGS_TABLE)
+    .select("id, data, updated_at")
+    .order("updated_at", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (fallbackResult.error || !fallbackResult.data) {
     return null;
   }
 
+  return fallbackResult.data as SiteSettingsRow;
+}
+
+export async function loadSharedSnapshot(): Promise<SyncSnapshot | null> {
+  const [settingsResult, propertiesResult, leadsResult, reviewsResult, tiersResult] =
+    await Promise.all([
+      loadCanonicalSettingsRow(),
+      supabase
+        .from(PROPERTIES_TABLE)
+        .select("id, data, sort_order, created_at, updated_at")
+        .order("sort_order", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true, nullsFirst: false }),
+      supabase
+        .from(LEADS_TABLE)
+        .select("id, data, status, created_at")
+        .order("created_at", { ascending: false, nullsFirst: false }),
+      supabase
+        .from(REVIEWS_TABLE)
+        .select("id, name, location, rating, quote, approved, created_at")
+        .order("created_at", { ascending: false, nullsFirst: false }),
+      supabase
+        .from(OWNERSHIP_TIERS_TABLE)
+        .select("id, data, sort_order")
+        .order("sort_order", { ascending: true, nullsFirst: false }),
+    ]);
+
+  if (!settingsResult || propertiesResult.error || leadsResult.error || reviewsResult.error) {
+    return null;
+  }
+
+  const settings = {
+    ...settingsResult.data,
+    ownershipTiers:
+      (settingsResult.data?.ownershipTiers as OwnershipTier[] | undefined) ||
+      (tiersResult.error
+        ? []
+        : ((tiersResult.data as OwnershipTierRow[] | null | undefined)?.map((row) => row.data) || [])),
+  } as SiteSettings;
+
   return {
-    version: data.version,
-    updatedAt: data.updated_at || new Date().toISOString(),
-    properties: data.properties,
-    leads: data.leads,
-    reviews: data.reviews,
-    settings: data.settings,
+    version: 1,
+    updatedAt: toIso(settingsResult.updated_at),
+    properties: (propertiesResult.data as PropertyRow[] | null | undefined)?.map((row) => ({
+      ...row.data,
+      id: row.id,
+    })) || [],
+    leads: (leadsResult.data as LeadRow[] | null | undefined)?.map((row) => ({
+      ...row.data,
+      id: row.id,
+      status: row.status || row.data.status,
+      createdAt: row.created_at || row.data.createdAt || new Date().toISOString(),
+    })) || [],
+    reviews: (reviewsResult.data as ReviewRow[] | null | undefined)?.map((row) => ({
+      id: row.id,
+      name: row.name,
+      location: row.location || undefined,
+      rating: row.rating,
+      quote: row.quote,
+      approved: row.approved,
+      createdAt: row.created_at || new Date().toISOString(),
+    })) || [],
+    settings,
   };
 }
 
 export async function saveSharedSnapshot(snapshot: SyncSnapshot): Promise<void> {
-  const row: SiteStateRow = {
-    id: SITE_STATE_ID,
+  const [existingProperties, existingLeads, existingReviews, existingTiers] = await Promise.all([
+    supabase.from(PROPERTIES_TABLE).select("id"),
+    supabase.from(LEADS_TABLE).select("id"),
+    supabase.from(REVIEWS_TABLE).select("id"),
+    supabase.from(OWNERSHIP_TIERS_TABLE).select("id"),
+  ]);
+
+  if (existingProperties.error) throw new Error(existingProperties.error.message);
+  if (existingLeads.error) throw new Error(existingLeads.error.message);
+  if (existingReviews.error) throw new Error(existingReviews.error.message);
+  if (existingTiers.error) throw new Error(existingTiers.error.message);
+
+  const propertyRows: PropertyRow[] = snapshot.properties.map((property, index) => ({
+    id: property.id,
+    data: property,
+    sort_order: index,
+    created_at: new Date().toISOString(),
     updated_at: snapshot.updatedAt,
-    ...snapshot,
+  }));
+
+  const leadRows: LeadRow[] = snapshot.leads.map((lead) => ({
+    id: lead.id,
+    data: lead,
+    status: lead.status,
+    created_at: lead.createdAt,
+  }));
+
+  const reviewRows: ReviewRow[] = snapshot.reviews.map((review) => ({
+    id: review.id,
+    name: review.name,
+    location: review.location || null,
+    rating: review.rating,
+    quote: review.quote,
+    approved: review.approved,
+    created_at: review.createdAt,
+  }));
+
+  const ownershipTierRows: OwnershipTierRow[] = (snapshot.settings.ownershipTiers || []).map(
+    (tier, index) => ({
+      id: tier.id,
+      data: tier,
+      sort_order: index,
+    }),
+  );
+
+  const settingsRow: SiteSettingsRow = {
+    id: SITE_SETTINGS_ROW_ID,
+    data: snapshot.settings,
+    updated_at: snapshot.updatedAt,
   };
 
-  const { error } = await supabase.from(SITE_STATE_TABLE).upsert(row, { onConflict: "id" });
+  const [settingsWrite, propertiesWrite, leadsWrite, reviewsWrite, tiersWrite] = await Promise.all([
+    supabase.from(SITE_SETTINGS_TABLE).upsert(settingsRow, { onConflict: "id" }),
+    propertyRows.length
+      ? supabase.from(PROPERTIES_TABLE).upsert(propertyRows, { onConflict: "id" })
+      : Promise.resolve({ error: null }),
+    leadRows.length
+      ? supabase.from(LEADS_TABLE).upsert(leadRows, { onConflict: "id" })
+      : Promise.resolve({ error: null }),
+    reviewRows.length
+      ? supabase.from(REVIEWS_TABLE).upsert(reviewRows, { onConflict: "id" })
+      : Promise.resolve({ error: null }),
+    ownershipTierRows.length
+      ? supabase.from(OWNERSHIP_TIERS_TABLE).upsert(ownershipTierRows, { onConflict: "id" })
+      : Promise.resolve({ error: null }),
+  ]);
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (settingsWrite.error) throw new Error(settingsWrite.error.message);
+  if (propertiesWrite.error) throw new Error(propertiesWrite.error.message);
+  if (leadsWrite.error) throw new Error(leadsWrite.error.message);
+  if (reviewsWrite.error) throw new Error(reviewsWrite.error.message);
+  if (tiersWrite.error) throw new Error(tiersWrite.error.message);
+
+  const deleteMissing = async (table: string, existingIds: string[], nextIds: string[]) => {
+    const missingIds = existingIds.filter((id) => !nextIds.includes(id));
+    if (!missingIds.length) return;
+    const { error } = await supabase.from(table).delete().in("id", missingIds);
+    if (error) throw new Error(error.message);
+  };
+
+  await Promise.all([
+    deleteMissing(
+      PROPERTIES_TABLE,
+      ((existingProperties.data || []) as { id: string }[]).map((row) => row.id),
+      snapshot.properties.map((property) => property.id),
+    ),
+    deleteMissing(
+      LEADS_TABLE,
+      ((existingLeads.data || []) as { id: string }[]).map((row) => row.id),
+      snapshot.leads.map((lead) => lead.id),
+    ),
+    deleteMissing(
+      REVIEWS_TABLE,
+      ((existingReviews.data || []) as { id: string }[]).map((row) => row.id),
+      snapshot.reviews.map((review) => review.id),
+    ),
+    deleteMissing(
+      OWNERSHIP_TIERS_TABLE,
+      ((existingTiers.data || []) as { id: string }[]).map((row) => row.id),
+      (snapshot.settings.ownershipTiers || []).map((tier) => tier.id),
+    ),
+  ]);
 }
 
 export function snapshotSize(snapshot: SyncSnapshot): number {
