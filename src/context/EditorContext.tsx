@@ -46,14 +46,16 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     });
 
   const pendingCount = Object.keys(pending).length;
-    const nextSettings = { ...settings, contentOverrides, imageOverrides };
-    updateSettings({ contentOverrides, imageOverrides });
-    void syncNow(buildSnapshot(properties, nextSettings, leads, reviews));
 
   const saveAll = () => {
     setSaving(true);
     const contentOverrides = { ...(settings.contentOverrides || {}) };
     const imageOverrides = { ...(settings.imageOverrides || {}) };
+    const nextSettings = {
+      ...settings,
+      contentOverrides,
+      imageOverrides,
+    };
 
     Object.entries(pending).forEach(([key, value]) => {
       if (key.startsWith("img:")) {
@@ -64,6 +66,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     });
 
     updateSettings({ contentOverrides, imageOverrides });
+    void syncNow(buildSnapshot(properties, nextSettings, leads, reviews));
     setPendingState({});
     setTimeout(() => setSaving(false), 600);
   };
