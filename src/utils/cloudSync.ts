@@ -150,8 +150,18 @@ export async function loadSharedSnapshot(): Promise<SyncSnapshot | null> {
         .order("sort_order", { ascending: true, nullsFirst: false }),
     ]);
 
-  if (!settingsResult || propertiesResult.error || leadsResult.error || reviewsResult.error) {
+  if (!settingsResult) {
     return null;
+  }
+
+  if (propertiesResult.error) {
+    throw new Error(propertiesResult.error.message);
+  }
+  if (leadsResult.error) {
+    throw new Error(leadsResult.error.message);
+  }
+  if (reviewsResult.error) {
+    throw new Error(reviewsResult.error.message);
   }
 
   const settings = {

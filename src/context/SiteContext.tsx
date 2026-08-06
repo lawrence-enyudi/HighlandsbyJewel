@@ -8,12 +8,18 @@ import {
 } from "react";
 import {
   buildSnapshot,
+  LEADS_TABLE,
+  OWNERSHIP_TIERS_TABLE,
+  PROPERTIES_TABLE,
+  REVIEWS_TABLE,
+  SITE_SETTINGS_TABLE,
   mergeSnapshot,
   loadSharedSnapshot,
   saveSharedSnapshot,
   snapshotSize,
   type CloudConfig,
 } from "@/utils/cloudSync";
+import { supabase } from "@/lib/supabase";
 
 export type PropertyCategory = "Lot" | "Condo" | "Townhouse";
 
@@ -713,7 +719,7 @@ type SiteContextType = {
   // Cloud backup & restore
   cloudConfig: CloudConfig;
   updateCloudConfig: (c: Partial<CloudConfig>) => void;
-  syncNow: () => Promise<{ ok: boolean; message: string }>;
+  requestImmediateSync: () => void;
   exportBackup: () => void;
   importBackup: (file: File) => Promise<{ ok: boolean; message: string }>;
   lastSyncedAt: string | null;
@@ -752,10 +758,12 @@ export function SiteProvider({ children }: { children: ReactNode }) {
   });
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<"idle" | "syncing" | "error">("idle");
+  const [syncRequestId, setSyncRequestId] = useState(0);
 
   const pushTimer = useRef<number | null>(null);
   const hydratingRef = useRef(false);
   const lastRemoteUpdatedAtRef = useRef<string | null>(null);
+  const lastProcessedSyncRequestRef = useRef(0);
 
   const applyRemoteSnapshot = (snapshot: Awaited<ReturnType<typeof loadSharedSnapshot>>) => {
     if (!snapshot) return;
@@ -798,10 +806,21 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const requestImmediateSync = () => {
+    setSyncRequestId((value) => value + 1);
+  };
+
   // Auto-push to Supabase (debounced) whenever content changes.
   useEffect(() => {
     if (hydratingRef.current) return;
     if (pushTimer.current) window.clearTimeout(pushTimer.current);
+    const shouldFlushImmediately = syncRequestId !== lastProcessedSyncRequestRef.current;
+    if (shouldFlushImmediately) {
+      lastProcessedSyncRequestRef.current = syncRequestId;
+      void pushSharedState();
+      return;
+    }
+
     pushTimer.current = window.setTimeout(() => {
       void pushSharedState();
     }, 1200);
@@ -809,12 +828,24 @@ export function SiteProvider({ children }: { children: ReactNode }) {
       if (pushTimer.current) window.clearTimeout(pushTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [properties, settings, leads, reviews]);
+  }, [properties, settings, leads, reviews, syncRequestId]);
 
-  // On mount: hydrate from the shared Supabase row, then keep polling for newer edits.
+  // On mount: hydrate from the shared Supabase row, then keep refreshing for newer edits.
   useEffect(() => {
     hydratingRef.current = true;
     let cancelled = false;
+    const refreshRemoteState = async () => {
+      if (hydratingRef.current) return;
+      try {
+        const snapshot = await loadSharedSnapshot();
+        if (snapshot && snapshot.updatedAt !== lastRemoteUpdatedAtRef.current) {
+          applyRemoteSnapshot(snapshot);
+        }
+      } catch {
+        // ignore refresh failures; local edits still persist
+      }
+    };
+
     void (async () => {
       try {
         const snapshot = await loadSharedSnapshot();
@@ -824,7 +855,6 @@ export function SiteProvider({ children }: { children: ReactNode }) {
           window.setTimeout(() => {
             if (!cancelled) {
               hydratingRef.current = false;
-              void pushSharedState();
             }
           }, 600);
         }
@@ -832,6 +862,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
         window.setTimeout(() => {
           if (!cancelled) {
             hydratingRef.current = false;
+            setSyncState("error");
           }
         }, 600);
       } finally {
@@ -839,24 +870,34 @@ export function SiteProvider({ children }: { children: ReactNode }) {
       }
     })();
 
+    const remoteChannel = supabase
+      .channel("site-shared-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: SITE_SETTINGS_TABLE }, () => {
+        void refreshRemoteState();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: PROPERTIES_TABLE }, () => {
+        void refreshRemoteState();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: LEADS_TABLE }, () => {
+        void refreshRemoteState();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: REVIEWS_TABLE }, () => {
+        void refreshRemoteState();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: OWNERSHIP_TIERS_TABLE }, () => {
+        void refreshRemoteState();
+      })
+      .subscribe();
+
     const pollTimer = window.setInterval(() => {
-      if (hydratingRef.current) return;
-      void (async () => {
-        try {
-          const snapshot = await loadSharedSnapshot();
-          if (snapshot && snapshot.updatedAt !== lastRemoteUpdatedAtRef.current) {
-            applyRemoteSnapshot(snapshot);
-          }
-        } catch {
-          // ignore poll failures; local edits still persist
-        }
-      })();
+      void refreshRemoteState();
     }, 10000);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     return () => {
       cancelled = true;
       window.clearInterval(pollTimer);
+      void supabase.removeChannel(remoteChannel);
     };
   }, []);
 
@@ -1019,10 +1060,6 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     setCloudConfig((prev) => ({ ...prev, ...c }));
   };
 
-  const syncNow = async (): Promise<{ ok: boolean; message: string }> => {
-    return pushSharedState();
-  };
-
   const exportBackup = () => {
     const backup = {
       app: "tagaytay-highlands-by-jewel",
@@ -1061,6 +1098,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
           cloudSync: prev.cloudSync,
         }));
       }
+      requestImmediateSync();
       return { ok: true, message: "Backup restored successfully. All edits are live on this device." };
     } catch {
       return { ok: false, message: "Could not read the backup file. Please try again." };
@@ -1098,7 +1136,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
         selectedTrippingProperty,
         cloudConfig,
         updateCloudConfig,
-        syncNow,
+        requestImmediateSync,
         exportBackup,
         importBackup,
         lastSyncedAt,

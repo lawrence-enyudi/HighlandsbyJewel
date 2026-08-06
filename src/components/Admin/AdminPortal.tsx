@@ -43,7 +43,6 @@ import {
   Camera,
   Pencil,
   Cloud,
-  CloudUpload,
   Download,
   UploadCloud,
   RefreshCw,
@@ -231,7 +230,7 @@ export default function AdminPortal() {
     deleteReview,
     toggleReviewApproval,
     resetAllToDefault,
-    syncNow,
+    requestImmediateSync,
     exportBackup,
     importBackup,
     lastSyncedAt,
@@ -482,6 +481,7 @@ export default function AdminPortal() {
     } else {
       addProperty(finalProp);
     }
+    requestImmediateSync();
     setIsPropModalOpen(false);
     triggerSaveToast();
   };
@@ -489,6 +489,7 @@ export default function AdminPortal() {
   const handleSaveSettings = (e: FormEvent) => {
     e.preventDefault();
     updateSettings(tempSettings);
+    requestImmediateSync();
     triggerSaveToast();
   };
 
@@ -1815,6 +1816,7 @@ export default function AdminPortal() {
                       type="button"
                       onClick={() => {
                         updateSettings(tempSettings);
+                          requestImmediateSync();
                         triggerSaveToast();
                       }}
                       className="mt-4 inline-flex items-center gap-2 rounded-full bg-gradient-to-b from-gold-400 via-gold-500 to-gold-600 px-7 py-3 text-sm font-semibold text-highlands-950 shadow-md transition-transform duration-300 hover:-translate-y-0.5"
@@ -1855,7 +1857,7 @@ export default function AdminPortal() {
                             ? "Syncing to Supabase..."
                             : syncState === "error"
                               ? "Last sync failed"
-                              : "Supabase sync is ON"}
+                              : "Auto sync is ON"}
                         </span>
                       </div>
                       {lastSyncedAt && (
@@ -1866,14 +1868,6 @@ export default function AdminPortal() {
                     </div>
 
                     <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                      <button
-                        type="button"
-                        onClick={() => void syncNow()}
-                        disabled={syncState === "syncing"}
-                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-b from-gold-400 via-gold-500 to-gold-600 px-5 py-2.5 text-xs font-semibold text-highlands-950 shadow-xs transition-transform hover:-translate-y-0.5 disabled:opacity-50"
-                      >
-                        <CloudUpload className="h-4 w-4" /> Sync Now
-                      </button>
                       <button
                         type="button"
                         onClick={exportBackup}
@@ -1892,6 +1886,7 @@ export default function AdminPortal() {
                             if (!file) return;
                             const res = await importBackup(file);
                             alert(res.message);
+                            if (res.ok) requestImmediateSync();
                             e.target.value = "";
                           }}
                         />
