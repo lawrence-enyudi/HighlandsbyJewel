@@ -719,7 +719,7 @@ type SiteContextType = {
   // Cloud backup & restore
   cloudConfig: CloudConfig;
   updateCloudConfig: (c: Partial<CloudConfig>) => void;
-  requestImmediateSync: () => void;
+  syncNow: () => Promise<{ ok: boolean; message: string }>;
   exportBackup: () => void;
   importBackup: (file: File) => Promise<{ ok: boolean; message: string }>;
   lastSyncedAt: string | null;
@@ -758,12 +758,10 @@ export function SiteProvider({ children }: { children: ReactNode }) {
   });
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<"idle" | "syncing" | "error">("idle");
-  const [syncRequestId, setSyncRequestId] = useState(0);
 
   const pushTimer = useRef<number | null>(null);
   const hydratingRef = useRef(false);
   const lastRemoteUpdatedAtRef = useRef<string | null>(null);
-  const lastProcessedSyncRequestRef = useRef(0);
 
   const applyRemoteSnapshot = (snapshot: Awaited<ReturnType<typeof loadSharedSnapshot>>) => {
     if (!snapshot) return;
@@ -806,21 +804,15 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const requestImmediateSync = () => {
-    setSyncRequestId((value) => value + 1);
+  const syncNow = async (): Promise<{ ok: boolean; message: string }> => {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    return pushSharedState();
   };
 
   // Auto-push to Supabase (debounced) whenever content changes.
   useEffect(() => {
     if (hydratingRef.current) return;
     if (pushTimer.current) window.clearTimeout(pushTimer.current);
-    const shouldFlushImmediately = syncRequestId !== lastProcessedSyncRequestRef.current;
-    if (shouldFlushImmediately) {
-      lastProcessedSyncRequestRef.current = syncRequestId;
-      void pushSharedState();
-      return;
-    }
-
     pushTimer.current = window.setTimeout(() => {
       void pushSharedState();
     }, 1200);
@@ -828,7 +820,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
       if (pushTimer.current) window.clearTimeout(pushTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [properties, settings, leads, reviews, syncRequestId]);
+  }, [properties, settings, leads, reviews]);
 
   // On mount: hydrate from the shared Supabase row, then keep refreshing for newer edits.
   useEffect(() => {
@@ -1098,7 +1090,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
           cloudSync: prev.cloudSync,
         }));
       }
-      requestImmediateSync();
+      void syncNow();
       return { ok: true, message: "Backup restored successfully. All edits are live on this device." };
     } catch {
       return { ok: false, message: "Could not read the backup file. Please try again." };
@@ -1136,7 +1128,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
         selectedTrippingProperty,
         cloudConfig,
         updateCloudConfig,
-        requestImmediateSync,
+        syncNow,
         exportBackup,
         importBackup,
         lastSyncedAt,

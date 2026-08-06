@@ -230,7 +230,7 @@ export default function AdminPortal() {
     deleteReview,
     toggleReviewApproval,
     resetAllToDefault,
-    requestImmediateSync,
+    syncNow,
     exportBackup,
     importBackup,
     lastSyncedAt,
@@ -481,7 +481,7 @@ export default function AdminPortal() {
     } else {
       addProperty(finalProp);
     }
-    requestImmediateSync();
+    void syncNow();
     setIsPropModalOpen(false);
     triggerSaveToast();
   };
@@ -489,7 +489,7 @@ export default function AdminPortal() {
   const handleSaveSettings = (e: FormEvent) => {
     e.preventDefault();
     updateSettings(tempSettings);
-    requestImmediateSync();
+    void syncNow();
     triggerSaveToast();
   };
 
@@ -1816,7 +1816,7 @@ export default function AdminPortal() {
                       type="button"
                       onClick={() => {
                         updateSettings(tempSettings);
-                          requestImmediateSync();
+                        void syncNow();
                         triggerSaveToast();
                       }}
                       className="mt-4 inline-flex items-center gap-2 rounded-full bg-gradient-to-b from-gold-400 via-gold-500 to-gold-600 px-7 py-3 text-sm font-semibold text-highlands-950 shadow-md transition-transform duration-300 hover:-translate-y-0.5"
@@ -1886,7 +1886,7 @@ export default function AdminPortal() {
                             if (!file) return;
                             const res = await importBackup(file);
                             alert(res.message);
-                            if (res.ok) requestImmediateSync();
+                            if (res.ok) void syncNow();
                             e.target.value = "";
                           }}
                         />

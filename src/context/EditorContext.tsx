@@ -24,21 +24,20 @@ type EditorContextType = {
 const EditorContext = createContext<EditorContextType | null>(null);
 
 export function EditorProvider({ children }: { children: ReactNode }) {
-  const { settings, updateSettings, requestImmediateSync } = useSite();
+  const { settings, updateSettings, syncNow } = useSite();
   const [isEditMode, setIsEditMode] = useState(false);
   const [pending, setPendingState] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   const enterEditMode = () => setIsEditMode(true);
   const exitEditMode = () => {
-    requestImmediateSync();
     setIsEditMode(false);
     setPendingState({});
   };
 
   const setPending = (key: string, value: string) =>
     setPendingState((prev) => ({ ...prev, [key]: value }));
-
+    void syncNow();
   const removePending = (key: string) =>
     setPendingState((prev) => {
       const next = { ...prev };
