@@ -10,7 +10,7 @@ import {
 } from "@/context/SiteContext";
 import { useEditor } from "@/context/EditorContext";
 import { calculatePromoPrice } from "@/utils/promo";
-import { fileToCompressedDataUrl } from "@/utils/cloudSync";
+import { buildSnapshot, fileToCompressedDataUrl } from "@/utils/cloudSync";
 import { OFFICIAL_RESTAURANTS, PLACES_TO_GO } from "@/data/communities";
 import {
   X,
@@ -465,24 +465,38 @@ export default function AdminPortal() {
     e.preventDefault();
     const finalImages =
       propForm.images && propForm.images.length > 0 ? propForm.images : [propForm.image];
+    const propertyId = editingProp ? editingProp.id : `prop-${Date.now()}`;
     const finalProp = {
       ...propForm,
       image: finalImages[0] || propForm.image,
       images: finalImages,
     };
+    const nextProperties = editingProp
+      ? properties.map((prop) => (prop.id === propertyId ? { ...prop, ...finalProp } : prop))
+      : [{ ...finalProp, id: propertyId }, ...properties];
+    const nextSettings = editingProp
+      ? (() => {
+          const oi = { ...(settings.imageOverrides || {}) };
+          delete oi[`prop.${propertyId}`];
+          delete oi[`prop.${propertyId}.detail`];
+          return Object.keys(oi).length !== Object.keys(settings.imageOverrides || {}).length
+            ? { ...settings, imageOverrides: oi }
+            : settings;
+        })()
+      : settings;
     if (editingProp) {
-      updateProperty(editingProp.id, finalProp);
+      updateProperty(propertyId, finalProp);
       // Clear any Live-Editor image override so the portal's photo changes take effect
       const oi = { ...(settings.imageOverrides || {}) };
-      delete oi[`prop.${editingProp.id}`];
-      delete oi[`prop.${editingProp.id}.detail`];
+      delete oi[`prop.${propertyId}`];
+      delete oi[`prop.${propertyId}.detail`];
       if (Object.keys(oi).length !== Object.keys(settings.imageOverrides || {}).length) {
         updateSettings({ imageOverrides: oi });
       }
     } else {
-      addProperty(finalProp);
+      addProperty({ ...finalProp, id: propertyId });
     }
-    void syncNow();
+    void syncNow(buildSnapshot(nextProperties, nextSettings, leads, reviews));
     setIsPropModalOpen(false);
     triggerSaveToast();
   };
@@ -490,7 +504,7 @@ export default function AdminPortal() {
   const handleSaveSettings = (e: FormEvent) => {
     e.preventDefault();
     updateSettings(tempSettings);
-    void syncNow();
+    void syncNow(buildSnapshot(properties, tempSettings, leads, reviews));
     triggerSaveToast();
   };
 
@@ -1817,7 +1831,7 @@ export default function AdminPortal() {
                       type="button"
                       onClick={() => {
                         updateSettings(tempSettings);
-                        void syncNow();
+                        void syncNow(buildSnapshot(properties, tempSettings, leads, reviews));
                         triggerSaveToast();
                       }}
                       className="mt-4 inline-flex items-center gap-2 rounded-full bg-gradient-to-b from-gold-400 via-gold-500 to-gold-600 px-7 py-3 text-sm font-semibold text-highlands-950 shadow-md transition-transform duration-300 hover:-translate-y-0.5"
@@ -1887,7 +1901,6 @@ export default function AdminPortal() {
                             if (!file) return;
                             const res = await importBackup(file);
                             alert(res.message);
-                            if (res.ok) void syncNow();
                             e.target.value = "";
                           }}
                         />

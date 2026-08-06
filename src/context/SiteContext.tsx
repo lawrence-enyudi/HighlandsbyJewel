@@ -17,6 +17,7 @@ import {
   loadSharedSnapshot,
   saveSharedSnapshot,
   snapshotSize,
+  type SyncSnapshot,
   type CloudConfig,
 } from "@/utils/cloudSync";
 import { supabase } from "@/lib/supabase";
@@ -701,7 +702,7 @@ type SiteContextType = {
   loginAdmin: (pin: string) => AdminRole;
   logoutAdmin: () => void;
   updateSettings: (newSettings: Partial<SiteSettings>) => void;
-  addProperty: (property: Omit<Property, "id">) => void;
+  addProperty: (property: Omit<Property, "id"> & { id?: string }) => void;
   updateProperty: (id: string, property: Partial<Property>) => void;
   deleteProperty: (id: string) => void;
   addLead: (leadData: Omit<SiteTrippingLead, "id" | "createdAt" | "status">) => void;
@@ -719,7 +720,7 @@ type SiteContextType = {
   // Cloud backup & restore
   cloudConfig: CloudConfig;
   updateCloudConfig: (c: Partial<CloudConfig>) => void;
-  syncNow: () => Promise<{ ok: boolean; message: string }>;
+  syncNow: (snapshot?: SyncSnapshot) => Promise<{ ok: boolean; message: string }>;
   exportBackup: () => void;
   importBackup: (file: File) => Promise<{ ok: boolean; message: string }>;
   lastSyncedAt: string | null;
@@ -777,13 +778,14 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     }, 800);
   };
 
-  const pushSharedState = async (): Promise<{ ok: boolean; message: string }> => {
+  const pushSharedState = async (
+    snapshot = buildSnapshot(properties, settings, leads, reviews),
+  ): Promise<{ ok: boolean; message: string }> => {
     if (hydratingRef.current) {
       return { ok: false, message: "Hydrating shared state, try again in a moment." };
     }
     setSyncState("syncing");
     try {
-      const snapshot = buildSnapshot(properties, settings, leads, reviews);
       if (snapshotSize(snapshot) > 4_500_000) {
         const message =
           "Shared state is too large to store comfortably in Supabase. Reduce embedded image data or move uploads to Supabase Storage.";
@@ -804,9 +806,8 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const syncNow = async (): Promise<{ ok: boolean; message: string }> => {
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-    return pushSharedState();
+  const syncNow = async (snapshot?: SyncSnapshot): Promise<{ ok: boolean; message: string }> => {
+    return pushSharedState(snapshot);
   };
 
   // Auto-push to Supabase (debounced) whenever content changes.
@@ -956,8 +957,8 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     setSettings((prev) => ({ ...prev, ...newSettings }));
   };
 
-  const addProperty = (newProp: Omit<Property, "id">) => {
-    const id = `prop-${Date.now()}`;
+  const addProperty = (newProp: Omit<Property, "id"> & { id?: string }) => {
+    const id = newProp.id || `prop-${Date.now()}`;
     const images = newProp.images && newProp.images.length > 0 ? newProp.images : [newProp.image];
     setProperties((prev) => [{ ...newProp, id, images }, ...prev]);
   };

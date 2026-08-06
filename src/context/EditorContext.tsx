@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { useSite } from "./SiteContext";
+import { buildSnapshot } from "@/utils/cloudSync";
 
 type EditorContextType = {
   isEditMode: boolean;
@@ -24,7 +25,7 @@ type EditorContextType = {
 const EditorContext = createContext<EditorContextType | null>(null);
 
 export function EditorProvider({ children }: { children: ReactNode }) {
-  const { settings, updateSettings, syncNow } = useSite();
+  const { properties, settings, leads, reviews, updateSettings, syncNow } = useSite();
   const [isEditMode, setIsEditMode] = useState(false);
   const [pending, setPendingState] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -37,7 +38,6 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 
   const setPending = (key: string, value: string) =>
     setPendingState((prev) => ({ ...prev, [key]: value }));
-    void syncNow();
   const removePending = (key: string) =>
     setPendingState((prev) => {
       const next = { ...prev };
@@ -46,7 +46,9 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     });
 
   const pendingCount = Object.keys(pending).length;
-  const hasPending = pendingCount > 0;
+    const nextSettings = { ...settings, contentOverrides, imageOverrides };
+    updateSettings({ contentOverrides, imageOverrides });
+    void syncNow(buildSnapshot(properties, nextSettings, leads, reviews));
 
   const saveAll = () => {
     setSaving(true);
