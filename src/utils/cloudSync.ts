@@ -261,55 +261,43 @@ export async function saveSharedSnapshot(snapshot: SyncSnapshot): Promise<void> 
     updated_at: snapshot.updatedAt,
   };
 
-  const [settingsWrite, propertiesWrite, leadsWrite, reviewsWrite, tiersWrite] = await Promise.all([
-    supabase.from(SITE_SETTINGS_TABLE).upsert(settingsRow, { onConflict: "id" }),
-    propertyRows.length
-      ? supabase.from(PROPERTIES_TABLE).upsert(propertyRows, { onConflict: "id" })
-      : Promise.resolve({ error: null }),
-    leadRows.length
-      ? supabase.from(LEADS_TABLE).upsert(leadRows, { onConflict: "id" })
-      : Promise.resolve({ error: null }),
-    reviewRows.length
-      ? supabase.from(REVIEWS_TABLE).upsert(reviewRows, { onConflict: "id" })
-      : Promise.resolve({ error: null }),
-    ownershipTierRows.length
-      ? supabase.from(OWNERSHIP_TIERS_TABLE).upsert(ownershipTierRows, { onConflict: "id" })
-      : Promise.resolve({ error: null }),
-  ]);
-
-  if (settingsWrite.error) throw new Error(settingsWrite.error.message);
-  if (propertiesWrite.error) throw new Error(propertiesWrite.error.message);
-  if (leadsWrite.error) throw new Error(leadsWrite.error.message);
-  if (reviewsWrite.error) throw new Error(reviewsWrite.error.message);
-  if (tiersWrite.error) throw new Error(tiersWrite.error.message);
-
-  const deleteMissing = async (table: string, existingIds: string[], nextIds: string[]) => {
-    const missingIds = existingIds.filter((id) => !nextIds.includes(id));
-    if (!missingIds.length) return;
-    const { error } = await supabase.from(table).delete().in("id", missingIds);
-    if (error) throw new Error(error.message);
+  const replaceRows = async <T extends { id: string }>(
+    table: string,
+    existingIds: string[],
+    nextRows: T[],
+  ) => {
+    if (existingIds.length) {
+      const { error: deleteError } = await supabase.from(table).delete().in("id", existingIds);
+      if (deleteError) throw new Error(deleteError.message);
+    }
+    if (!nextRows.length) return;
+    const { error: insertError } = await supabase.from(table).insert(nextRows);
+    if (insertError) throw new Error(insertError.message);
   };
 
+  const settingsWrite = await supabase.from(SITE_SETTINGS_TABLE).upsert(settingsRow, { onConflict: "id" });
+  if (settingsWrite.error) throw new Error(settingsWrite.error.message);
+
   await Promise.all([
-    deleteMissing(
+    replaceRows(
       PROPERTIES_TABLE,
       ((existingProperties.data || []) as { id: string }[]).map((row) => row.id),
-      snapshot.properties.map((property) => property.id),
+      propertyRows,
     ),
-    deleteMissing(
+    replaceRows(
       LEADS_TABLE,
       ((existingLeads.data || []) as { id: string }[]).map((row) => row.id),
-      snapshot.leads.map((lead) => lead.id),
+      leadRows,
     ),
-    deleteMissing(
+    replaceRows(
       REVIEWS_TABLE,
       ((existingReviews.data || []) as { id: string }[]).map((row) => row.id),
-      snapshot.reviews.map((review) => review.id),
+      reviewRows,
     ),
-    deleteMissing(
+    replaceRows(
       OWNERSHIP_TIERS_TABLE,
       ((existingTiers.data || []) as { id: string }[]).map((row) => row.id),
-      (snapshot.settings.ownershipTiers || []).map((tier) => tier.id),
+      ownershipTierRows,
     ),
   ]);
 }
