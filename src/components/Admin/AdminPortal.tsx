@@ -43,6 +43,7 @@ import {
   Camera,
   Pencil,
   Cloud,
+  CloudUpload,
   Download,
   UploadCloud,
   RefreshCw,
