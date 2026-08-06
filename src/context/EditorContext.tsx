@@ -46,6 +46,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     });
 
   const pendingCount = Object.keys(pending).length;
+  const hasPending = pendingCount > 0;
 
   const saveAll = () => {
     setSaving(true);
