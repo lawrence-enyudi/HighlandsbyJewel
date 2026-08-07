@@ -210,6 +210,21 @@ export async function loadSharedSnapshot(): Promise<SyncSnapshot | null> {
 }
 
 export async function saveSharedSnapshot(snapshot: SyncSnapshot): Promise<void> {
+  const [existingProperties, existingLeads, existingReviews, existingTiers, existingSettings] =
+    await Promise.all([
+      supabase.from(PROPERTIES_TABLE).select("id"),
+      supabase.from(LEADS_TABLE).select("id"),
+      supabase.from(REVIEWS_TABLE).select("id"),
+      supabase.from(OWNERSHIP_TIERS_TABLE).select("id"),
+      supabase.from(SITE_SETTINGS_TABLE).select("id").eq("id", SITE_SETTINGS_ROW_ID).maybeSingle(),
+    ]);
+
+  if (existingProperties.error) throw new Error(existingProperties.error.message);
+  if (existingLeads.error) throw new Error(existingLeads.error.message);
+  if (existingReviews.error) throw new Error(existingReviews.error.message);
+  if (existingTiers.error) throw new Error(existingTiers.error.message);
+  if (existingSettings.error) throw new Error(existingSettings.error.message);
+
   const propertyRows: PropertyRow[] = snapshot.properties.map((property, index) => ({
     id: property.id,
     data: property,
@@ -249,20 +264,54 @@ export async function saveSharedSnapshot(snapshot: SyncSnapshot): Promise<void> 
     updated_at: snapshot.updatedAt,
   };
 
-  const upsertRows = async <T extends { id: string }>(table: string, nextRows: T[]) => {
+  const saveRows = async <T extends { id: string }>(
+    table: string,
+    existingIds: string[],
+    nextRows: T[],
+  ) => {
     if (!nextRows.length) return;
-    const { error } = await supabase.from(table).upsert(nextRows, { onConflict: "id" });
-    if (error) throw new Error(error.message);
+    const existingIdSet = new Set(existingIds);
+    const operations = nextRows.map(async (row) => {
+      if (existingIdSet.has(row.id)) {
+        const { error } = await supabase.from(table).update(row).eq("id", row.id);
+        if (error) throw new Error(error.message);
+        return;
+      }
+      const { error } = await supabase.from(table).insert(row);
+      if (error) throw new Error(error.message);
+    });
+    await Promise.all(operations);
   };
 
-  const settingsWrite = await supabase.from(SITE_SETTINGS_TABLE).upsert(settingsRow, { onConflict: "id" });
-  if (settingsWrite.error) throw new Error(settingsWrite.error.message);
+  if (existingSettings.data) {
+    const { error } = await supabase.from(SITE_SETTINGS_TABLE).update(settingsRow).eq("id", SITE_SETTINGS_ROW_ID);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase.from(SITE_SETTINGS_TABLE).insert(settingsRow);
+    if (error) throw new Error(error.message);
+  }
 
   await Promise.all([
-    upsertRows(PROPERTIES_TABLE, propertyRows),
-    upsertRows(LEADS_TABLE, leadRows),
-    upsertRows(REVIEWS_TABLE, reviewRows),
-    upsertRows(OWNERSHIP_TIERS_TABLE, ownershipTierRows),
+    saveRows(
+      PROPERTIES_TABLE,
+      ((existingProperties.data || []) as { id: string }[]).map((row) => row.id),
+      propertyRows,
+    ),
+    saveRows(
+      LEADS_TABLE,
+      ((existingLeads.data || []) as { id: string }[]).map((row) => row.id),
+      leadRows,
+    ),
+    saveRows(
+      REVIEWS_TABLE,
+      ((existingReviews.data || []) as { id: string }[]).map((row) => row.id),
+      reviewRows,
+    ),
+    saveRows(
+      OWNERSHIP_TIERS_TABLE,
+      ((existingTiers.data || []) as { id: string }[]).map((row) => row.id),
+      ownershipTierRows,
+    ),
   ]);
 }
 

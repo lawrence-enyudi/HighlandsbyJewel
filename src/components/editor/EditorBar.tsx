@@ -10,10 +10,10 @@ export default function EditorBar() {
 
   if (!isEditMode) return null;
 
-  const handleExit = () => {
+  const handleExit = async () => {
     // Save anything pending first, then fully exit (also clears the editor session)
     if (hasPending) {
-      saveAll();
+      await saveAll();
     }
     exitEditMode();
     logoutAdmin();

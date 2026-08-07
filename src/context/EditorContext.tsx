@@ -52,28 +52,30 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     setSaving(true);
     const contentOverrides = { ...(settings.contentOverrides || {}) };
     const imageOverrides = { ...(settings.imageOverrides || {}) };
+
+    Object.entries(pending).forEach(([key, value]) => {
+      if (key.startsWith("img:")) {
+        imageOverrides[key.slice(4)] = value;
+      } else {
+        contentOverrides[key] = value;
+      }
+    });
+
     const nextSettings = {
       ...settings,
       contentOverrides,
       imageOverrides,
     };
 
-    Object.entries(pending).forEach(([key, value]) => {
-      if (key.startsWith("img:")) {
+    updateSettings({ contentOverrides, imageOverrides });
     const result = await syncNow(buildSnapshot(properties, nextSettings, leads, reviews));
-      } else {
     if (!result.ok) {
       setSaving(false);
       return;
     }
-    setSaving(false);
-      }
-    });
 
-    updateSettings({ contentOverrides, imageOverrides });
-    void syncNow(buildSnapshot(properties, nextSettings, leads, reviews));
     setPendingState({});
-    setTimeout(() => setSaving(false), 600);
+    setSaving(false);
   };
 
   const discardAll = () => setPendingState({});
