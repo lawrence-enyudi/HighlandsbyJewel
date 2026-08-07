@@ -13,12 +13,6 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-const JEWEL_IMG_PRESETS = [
-  { name: "Outdoor Blazer Portrait", url: "https://images.pexels.com/photos/6171657/pexels-photo-6171657.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=1200&w=800" },
-  { name: "Corporate Smile Portrait", url: "https://images.pexels.com/photos/8101969/pexels-photo-8101969.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=1200&w=800" },
-  { name: "Warm Business Casual", url: "https://images.pexels.com/photos/37830400/pexels-photo-37830400.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=1200&w=800" },
-];
-
 export default function AboutJewel() {
   const { settings, openSiteTrippingModal } = useSite();
 
@@ -37,7 +31,6 @@ export default function AboutJewel() {
               alt={`${settings.specialistName} - Property Specialist at Tagaytay Highlands`}
               className="group relative overflow-hidden rounded-[32px] border border-highlands-900/12 shadow-[0_20px_50px_-15px_rgba(22,61,44,0.18)] bg-white"
               imgClassName="h-[320px] w-full object-cover object-top sm:h-[540px]"
-              presets={JEWEL_IMG_PRESETS}
             >
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-highlands-950/80 via-highlands-950/10 to-transparent" />
 

@@ -511,7 +511,7 @@ export const INITIAL_SETTINGS: SiteSettings = {
   specialistNickname: "Jewel",
   specialistRole: "Accredited Property Specialist · Tagaytay Highlands",
   specialistPhoto:
-    "https://images.pexels.com/photos/6171657/pexels-photo-6171657.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=1200&w=800",
+    "/images/Jewel%20Profile.png",
   specialistTagline: "Your Dedicated Property Specialist in Tagaytay Highlands",
   specialistBio:
     "Hi, I'm Jewel! As an accredited property specialist at Tagaytay Highlands — one of the most exclusive private estates in the Philippines — my priority is giving you a transparent, pressure-free look into our available lots, condos, and townhouses across The Highlands, The Midlands, Midlands West, and The Greenlands. I arrange your exclusive gate pass, welcome you at the Sales Marketing Office (SMO), and take you on a relaxing Highlands van tour with direct developer computations.",

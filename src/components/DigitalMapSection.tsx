@@ -4,7 +4,7 @@ import { Reveal } from "./Reveal";
 import { EditableImage, EditableText } from "./editor/Editable";
 import { CalendarCheck, Expand, MapPinned, Navigation, X } from "lucide-react";
 
-const DEFAULT_MAP = "/images/tagaytay-highlands-digital-map.jpg";
+const DEFAULT_MAP = "/images/Highlands%20Map.jpg";
 
 const MAP_PRESETS = [
   { name: "Tagaytay Highlands Digital Map", url: DEFAULT_MAP },

@@ -21,7 +21,7 @@ export function Logo({ className, dark = false }: { className?: string; dark?: b
     >
       <span className="relative grid h-11 w-11 place-items-center overflow-hidden rounded-xl border border-gold-400/40 bg-white shadow-md transition-transform duration-500 group-hover:-translate-y-0.5 group-hover:rotate-2">
         <img
-          src="/images/th-logo.png"
+          src="/images/highlandslogo.png"
           alt="Tagaytay Highlands"
           className="h-9 w-9 object-contain"
         />

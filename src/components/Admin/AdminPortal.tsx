@@ -78,21 +78,6 @@ const PHOTO_PRESETS = [
   },
 ];
 
-const JEWEL_PHOTO_PRESETS = [
-  {
-    name: "Outdoor Blazer Portrait",
-    url: "https://images.pexels.com/photos/6171657/pexels-photo-6171657.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=1200&w=800",
-  },
-  {
-    name: "Corporate Smile Portrait",
-    url: "https://images.pexels.com/photos/8101969/pexels-photo-8101969.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=1200&w=800",
-  },
-  {
-    name: "Warm Business Casual",
-    url: "https://images.pexels.com/photos/37830400/pexels-photo-37830400.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=1200&w=800",
-  },
-];
-
 const getDefaultPromo = (daysAhead: number = 7): PropertyPromo => {
   const d = new Date();
   d.setDate(d.getDate() + daysAhead);
@@ -461,7 +446,7 @@ export default function AdminPortal() {
     });
   };
 
-  const handleSaveProp = (e: FormEvent) => {
+  const handleSaveProp = async (e: FormEvent) => {
     e.preventDefault();
     const finalImages =
       propForm.images && propForm.images.length > 0 ? propForm.images : [propForm.image];
@@ -496,15 +481,15 @@ export default function AdminPortal() {
     } else {
       addProperty({ ...finalProp, id: propertyId });
     }
-    void syncNow(buildSnapshot(nextProperties, nextSettings, leads, reviews));
+    await syncNow(buildSnapshot(nextProperties, nextSettings, leads, reviews));
     setIsPropModalOpen(false);
     triggerSaveToast();
   };
 
-  const handleSaveSettings = (e: FormEvent) => {
+  const handleSaveSettings = async (e: FormEvent) => {
     e.preventDefault();
     updateSettings(tempSettings);
-    void syncNow(buildSnapshot(properties, tempSettings, leads, reviews));
+    await syncNow(buildSnapshot(properties, tempSettings, leads, reviews));
     triggerSaveToast();
   };
 
@@ -1394,23 +1379,9 @@ export default function AdminPortal() {
                         }
                       />
 
-                      <div className="mt-3">
-                        <p className="text-[11px] text-pine-600 font-medium">Or pick from sample presets:</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {JEWEL_PHOTO_PRESETS.map((p) => (
-                            <button
-                              key={p.name}
-                              type="button"
-                              onClick={() =>
-                                setTempSettings({ ...tempSettings, specialistPhoto: p.url })
-                              }
-                              className="rounded-lg border border-highlands-900/10 bg-white px-2.5 py-1 text-[11px] text-highlands-900 font-medium hover:bg-cream-100"
-                            >
-                              {p.name}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                      <p className="mt-3 text-[11px] text-pine-600 font-medium">
+                        Upload only. No sample profile presets are shown here.
+                      </p>
                     </div>
 
                     <div className="rounded-2xl border border-highlands-900/10 bg-cream-50/60 p-6 space-y-4">
@@ -1656,8 +1627,7 @@ export default function AdminPortal() {
                           label="Tagaytay Highlands Digital Map"
                           subtitle="Upload the official estate digital map image"
                           currentImage={
-                            tempSettings.imageOverrides?.["digital.map"] ||
-                            "/images/tagaytay-highlands-digital-map.jpg"
+                            tempSettings.imageOverrides?.["digital.map"] || "/images/Highlands%20Map.jpg"
                           }
                           onImageSelected={(dataUrl) =>
                             setTempSettings({

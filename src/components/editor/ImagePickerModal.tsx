@@ -129,27 +129,29 @@ export default function ImagePickerModal({
         </div>
 
         {/* Presets */}
-        <div className="mt-4">
-          <p className="text-[11px] font-bold uppercase text-pine-600 tracking-wider">
-            Or choose a preset photo
-          </p>
-          <div className="mt-2 grid grid-cols-4 gap-2">
-            {presets.map((p) => (
-              <button
-                key={p.name}
-                type="button"
-                onClick={() => onSelect(p.url)}
-                className="group relative aspect-square overflow-hidden rounded-xl border border-highlands-900/10 shadow-2xs transition-all hover:border-gold-500"
-                title={p.name}
-              >
-                <img src={p.url} alt={p.name} className="h-full w-full object-cover" />
-                <span className="absolute inset-0 flex items-center justify-center bg-highlands-950/0 text-white opacity-0 transition-all group-hover:bg-highlands-950/50 group-hover:opacity-100">
-                  <Check className="h-4 w-4" />
-                </span>
-              </button>
-            ))}
+        {presets.length > 0 && (
+          <div className="mt-4">
+            <p className="text-[11px] font-bold uppercase text-pine-600 tracking-wider">
+              Or choose a preset photo
+            </p>
+            <div className="mt-2 grid grid-cols-4 gap-2">
+              {presets.map((p) => (
+                <button
+                  key={p.name}
+                  type="button"
+                  onClick={() => onSelect(p.url)}
+                  className="group relative aspect-square overflow-hidden rounded-xl border border-highlands-900/10 shadow-2xs transition-all hover:border-gold-500"
+                  title={p.name}
+                >
+                  <img src={p.url} alt={p.name} className="h-full w-full object-cover" />
+                  <span className="absolute inset-0 flex items-center justify-center bg-highlands-950/0 text-white opacity-0 transition-all group-hover:bg-highlands-950/50 group-hover:opacity-100">
+                    <Check className="h-4 w-4" />
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         <button
           type="button"
