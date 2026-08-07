@@ -210,18 +210,6 @@ export async function loadSharedSnapshot(): Promise<SyncSnapshot | null> {
 }
 
 export async function saveSharedSnapshot(snapshot: SyncSnapshot): Promise<void> {
-  const [existingProperties, existingLeads, existingReviews, existingTiers] = await Promise.all([
-    supabase.from(PROPERTIES_TABLE).select("id"),
-    supabase.from(LEADS_TABLE).select("id"),
-    supabase.from(REVIEWS_TABLE).select("id"),
-    supabase.from(OWNERSHIP_TIERS_TABLE).select("id"),
-  ]);
-
-  if (existingProperties.error) throw new Error(existingProperties.error.message);
-  if (existingLeads.error) throw new Error(existingLeads.error.message);
-  if (existingReviews.error) throw new Error(existingReviews.error.message);
-  if (existingTiers.error) throw new Error(existingTiers.error.message);
-
   const propertyRows: PropertyRow[] = snapshot.properties.map((property, index) => ({
     id: property.id,
     data: property,
@@ -261,44 +249,20 @@ export async function saveSharedSnapshot(snapshot: SyncSnapshot): Promise<void> 
     updated_at: snapshot.updatedAt,
   };
 
-  const replaceRows = async <T extends { id: string }>(
-    table: string,
-    existingIds: string[],
-    nextRows: T[],
-  ) => {
-    if (existingIds.length) {
-      const { error: deleteError } = await supabase.from(table).delete().in("id", existingIds);
-      if (deleteError) throw new Error(deleteError.message);
-    }
+  const upsertRows = async <T extends { id: string }>(table: string, nextRows: T[]) => {
     if (!nextRows.length) return;
-    const { error: insertError } = await supabase.from(table).insert(nextRows);
-    if (insertError) throw new Error(insertError.message);
+    const { error } = await supabase.from(table).upsert(nextRows, { onConflict: "id" });
+    if (error) throw new Error(error.message);
   };
 
   const settingsWrite = await supabase.from(SITE_SETTINGS_TABLE).upsert(settingsRow, { onConflict: "id" });
   if (settingsWrite.error) throw new Error(settingsWrite.error.message);
 
   await Promise.all([
-    replaceRows(
-      PROPERTIES_TABLE,
-      ((existingProperties.data || []) as { id: string }[]).map((row) => row.id),
-      propertyRows,
-    ),
-    replaceRows(
-      LEADS_TABLE,
-      ((existingLeads.data || []) as { id: string }[]).map((row) => row.id),
-      leadRows,
-    ),
-    replaceRows(
-      REVIEWS_TABLE,
-      ((existingReviews.data || []) as { id: string }[]).map((row) => row.id),
-      reviewRows,
-    ),
-    replaceRows(
-      OWNERSHIP_TIERS_TABLE,
-      ((existingTiers.data || []) as { id: string }[]).map((row) => row.id),
-      ownershipTierRows,
-    ),
+    upsertRows(PROPERTIES_TABLE, propertyRows),
+    upsertRows(LEADS_TABLE, leadRows),
+    upsertRows(REVIEWS_TABLE, reviewRows),
+    upsertRows(OWNERSHIP_TIERS_TABLE, ownershipTierRows),
   ]);
 }
 

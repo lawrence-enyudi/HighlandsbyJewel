@@ -763,6 +763,8 @@ export function SiteProvider({ children }: { children: ReactNode }) {
   const pushTimer = useRef<number | null>(null);
   const hydratingRef = useRef(false);
   const lastRemoteUpdatedAtRef = useRef<string | null>(null);
+  const syncInFlightRef = useRef<Promise<{ ok: boolean; message: string }> | null>(null);
+  const queuedSnapshotRef = useRef<SyncSnapshot | null>(null);
 
   const applyRemoteSnapshot = (snapshot: Awaited<ReturnType<typeof loadSharedSnapshot>>) => {
     if (!snapshot) return;
@@ -784,8 +786,13 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     if (hydratingRef.current) {
       return { ok: false, message: "Hydrating shared state, try again in a moment." };
     }
+    if (syncInFlightRef.current) {
+      queuedSnapshotRef.current = snapshot;
+      return syncInFlightRef.current;
+    }
     setSyncState("syncing");
-    try {
+    const syncPromise = (async () => {
+      try {
       if (snapshotSize(snapshot) > 4_500_000) {
         const message =
           "Shared state is too large to store comfortably in Supabase. Reduce embedded image data or move uploads to Supabase Storage.";
@@ -797,13 +804,27 @@ export function SiteProvider({ children }: { children: ReactNode }) {
       setLastSyncedAt(snapshot.updatedAt);
       setSyncState("idle");
       return { ok: true, message: "Synced to Supabase successfully." };
-    } catch {
-      setSyncState("error");
-      return {
-        ok: false,
-        message: "Supabase sync failed. Check your table name, row policies, and env vars.",
-      };
+      } catch {
+        setSyncState("error");
+        return {
+          ok: false,
+          message: "Supabase sync failed. Check your table name, row policies, and env vars.",
+        };
+      } finally {
+        syncInFlightRef.current = null;
+      }
+    })();
+
+    syncInFlightRef.current = syncPromise;
+    const result = await syncPromise;
+
+    const queuedSnapshot = queuedSnapshotRef.current;
+    queuedSnapshotRef.current = null;
+    if (queuedSnapshot) {
+      void pushSharedState(queuedSnapshot);
     }
+
+    return result;
   };
 
   const syncNow = async (snapshot?: SyncSnapshot): Promise<{ ok: boolean; message: string }> => {

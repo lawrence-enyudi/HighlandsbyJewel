@@ -17,7 +17,7 @@ type EditorContextType = {
   removePending: (key: string) => void;
   hasPending: boolean;
   pendingCount: number;
-  saveAll: () => void;
+  saveAll: () => Promise<void>;
   discardAll: () => void;
   saving: boolean;
 };
@@ -48,7 +48,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   const pendingCount = Object.keys(pending).length;
   const hasPending = pendingCount > 0;
 
-  const saveAll = () => {
+  const saveAll = async () => {
     setSaving(true);
     const contentOverrides = { ...(settings.contentOverrides || {}) };
     const imageOverrides = { ...(settings.imageOverrides || {}) };
@@ -60,9 +60,13 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 
     Object.entries(pending).forEach(([key, value]) => {
       if (key.startsWith("img:")) {
-        imageOverrides[key.slice(4)] = value;
+    const result = await syncNow(buildSnapshot(properties, nextSettings, leads, reviews));
       } else {
-        contentOverrides[key] = value;
+    if (!result.ok) {
+      setSaving(false);
+      return;
+    }
+    setSaving(false);
       }
     });
 
