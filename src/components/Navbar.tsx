@@ -4,12 +4,13 @@ import { cn } from "@/utils/cn";
 
 const links = [
   { label: "Properties", href: "#properties" },
-  { label: "4 Communities", href: "#communities" },
+  { label: "4 Districts", href: "#communities" },
   { label: "Digital Map", href: "#digital-map" },
   { label: "Clubs & Dining", href: "#amenities" },
   { label: "Site Tripping", href: "#site-tripping" },
   { label: "About Jewel", href: "#about-jewel" },
   { label: "FAQ", href: "#faq" },
+  { label: "Legal", href: "#legal" },
 ];
 
 export function Logo({ className, dark = false }: { className?: string; dark?: boolean }) {

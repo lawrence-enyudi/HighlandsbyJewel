@@ -6,7 +6,7 @@ import { Phone, Mail, MapPin, X } from "lucide-react";
 
 const cols = [
   {
-    title: "4 Communities",
+    title: "4 Districts",
     links: [
       { name: "The Highlands (High Altitude)", href: "#communities" },
       { name: "The Midlands (Golf & Lakeside)", href: "#communities" },
@@ -85,7 +85,7 @@ export default function Footer() {
   const legalDocs = legalContent(settings.specialistName, settings.locationAddress);
 
   return (
-    <footer className="relative overflow-hidden bg-gradient-to-b from-highlands-950 to-[#03170f] pt-16 pb-12 text-highlands-100">
+    <footer id="legal" className="relative overflow-hidden bg-gradient-to-b from-highlands-950 to-[#03170f] pt-16 pb-12 text-highlands-100">
       <div className="hairline absolute inset-x-0 top-0 h-px" aria-hidden="true" />
       <div
         className="animate-drift pointer-events-none absolute -top-24 right-1/4 h-72 w-72 rounded-full bg-highlands-600/15 blur-[120px]"
