@@ -13,14 +13,14 @@ import {
   PROPERTIES_TABLE,
   REVIEWS_TABLE,
   SITE_SETTINGS_TABLE,
-  PROJECTS_TABLE,
+  PROJECTS_TABLE_V2,
   mergeSnapshot,
   loadSharedSnapshot,
   saveSharedSnapshot,
   snapshotSize,
   type SyncSnapshot,
   type CloudConfig,
-} from "@/utils/cloudSync";
+} from "@/utils/cloudSyncV2";
 import { supabase } from "@/lib/supabase";
 import { normalizePaymentTerm } from "@/utils/paymentComputation";
 
@@ -808,7 +808,7 @@ const SiteContext = createContext<SiteContextType | null>(null);
 
 const STORAGE_KEYS = {
   AUTH: "tagaytay_highlands_jewel_auth",
-  PROJECTS: "tagaytay_highlands_jewel_projects",
+  PROJECTS: "tagaytay_highlands_jewel_projects_v2",
 };
 
 export function SiteProvider({ children }: { children: ReactNode }) {
@@ -994,7 +994,16 @@ export function SiteProvider({ children }: { children: ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: OWNERSHIP_TIERS_TABLE }, () => {
         void refreshRemoteState();
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: PROJECTS_TABLE }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: PROJECTS_TABLE_V2 }, () => {
+        void refreshRemoteState();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "project_images" }, () => {
+        void refreshRemoteState();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "payment_terms" }, () => {
+        void refreshRemoteState();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory" }, () => {
         void refreshRemoteState();
       })
       .subscribe();
@@ -1150,19 +1159,19 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const addProjectFile = (p: Omit<ProjectFile, "id" | "createdAt" | "updatedAt">) => {
+  const addProjectFile = async (p: Omit<ProjectFile, "id" | "createdAt" | "updatedAt">) => {
     const now = new Date().toISOString();
     const full: ProjectFile = normalizeProject({
       ...p,
       inventory: p.inventory || [],
-      id: `proj-${Date.now()}`,
+      id: `proj-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, // Use consistent ID format
       createdAt: now,
       updatedAt: now,
     });
     setProjectFiles((prev) => [full, ...prev]);
   };
 
-  const updateProjectFile = (id: string, updated: Partial<ProjectFile>) => {
+  const updateProjectFile = async (id: string, updated: Partial<ProjectFile>) => {
     setProjectFiles((prev) =>
       prev.map((p) =>
         p.id === id ? { ...p, ...updated, updatedAt: new Date().toISOString() } : p,
@@ -1170,7 +1179,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const deleteProjectFile = (id: string) => {
+  const deleteProjectFile = async (id: string) => {
     setProjectFiles((prev) => prev.filter((p) => p.id !== id));
   };
 

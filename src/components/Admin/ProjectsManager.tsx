@@ -1,6 +1,7 @@
 import { useState, useRef, type FormEvent, type ChangeEvent, type DragEvent } from "react";
 import { useSite, type InventoryUnit, type ProjectFile } from "@/context/SiteContext";
 import { fileToCompressedDataUrl } from "@/utils/cloudSync";
+import { uploadImageToStorage, deleteImageFromStorage, deleteProjectImages } from "@/utils/imageStorage";
 import { createPresetTerms } from "@/utils/paymentComputation";
 import ProjectInventory from "./ProjectInventory";
 import PaymentSchemeEditor from "./PaymentSchemeEditor";
@@ -20,6 +21,7 @@ import {
   FileSpreadsheet,
   Check,
   Package,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 
@@ -53,6 +55,8 @@ export default function ProjectsManager() {
   const [form, setForm] = useState<Omit<ProjectFile, "id" | "createdAt" | "updatedAt">>(emptyProject());
   const [expandedProject, setExpandedProject] = useState<string | null>(null);
   const [computeTarget, setComputeTarget] = useState<{ project: ProjectFile; unit: InventoryUnit } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const mapInputRef = useRef<HTMLInputElement>(null);
   const priceInputRef = useRef<HTMLInputElement>(null);
@@ -93,14 +97,33 @@ export default function ProjectsManager() {
 
   const processFile = async (file: File, callback: (url: string) => void) => {
     if (!file.type.startsWith("image/")) return;
+    
+    setIsUploading(true);
+    setUploadProgress(prev => prev + 1);
+    
     try {
-      callback(await fileToCompressedDataUrl(file));
-    } catch {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        if (e.target?.result) callback(e.target.result as string);
-      };
-      reader.readAsDataURL(file);
+      // Use Supabase Storage for new uploads
+      const projectId = editing?.id || `temp-${Date.now()}`;
+      const imageType = form.mapImages.length > form.priceListImages.length ? 'map' : 'price_list';
+      const index = imageType === 'map' ? form.mapImages.length : form.priceListImages.length;
+      
+      const { url } = await uploadImageToStorage(file, projectId, imageType, index);
+      callback(url);
+    } catch (error) {
+      console.error('Failed to upload to storage, falling back to data URL:', error);
+      // Fallback to data URL if storage fails
+      try {
+        callback(await fileToCompressedDataUrl(file));
+      } catch {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          if (e.target?.result) callback(e.target.result as string);
+        };
+        reader.readAsDataURL(file);
+      }
+    } finally {
+      setUploadProgress(prev => Math.max(0, prev - 1));
+      if (uploadProgress <= 1) setIsUploading(false);
     }
   };
 
@@ -122,10 +145,14 @@ export default function ProjectsManager() {
     }
   };
 
-  const handleFileInput = (e: ChangeEvent<HTMLInputElement>, target: "map" | "price") => {
+  const handleFileInput = async (e: ChangeEvent<HTMLInputElement>, target: "map" | "price") => {
     if (e.target.files) {
-      Array.from(e.target.files).forEach((file) => {
-        processFile(file, (url) => {
+      setIsUploading(true);
+      const files = Array.from(e.target.files);
+      setUploadProgress(files.length);
+      
+      for (const file of files) {
+        await processFile(file, (url) => {
           setForm((prev) => ({
             ...prev,
             [target === "map" ? "mapImages" : "priceListImages"]: [
@@ -134,20 +161,81 @@ export default function ProjectsManager() {
             ],
           }));
         });
-      });
+      }
+      
+      setUploadProgress(0);
+      setIsUploading(false);
     }
   };
 
-  const handleSave = (e: FormEvent) => {
+  const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) return;
-    if (editing) updateProjectFile(editing.id, form);
-    else addProjectFile(form);
-    setIsModalOpen(false);
+    
+    setIsUploading(true);
+    try {
+      if (editing) {
+        await updateProjectFile(editing.id, form);
+      } else {
+        await addProjectFile(form);
+      }
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error('Failed to save project:', error);
+      alert('Failed to save project. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleInventoryUpdate = (projectId: string, inventory: InventoryUnit[]) => {
     updateProjectFile(projectId, { inventory });
+  };
+
+  const handleDeleteProject = async (project: ProjectFile) => {
+    if (!window.confirm(`Delete "${project.name}" and all its images from storage?`)) return;
+    
+    setIsUploading(true);
+    try {
+      // Delete images from storage
+      await deleteProjectImages(project.id);
+      // Delete project from database
+      await deleteProjectFile(project.id);
+    } catch (error) {
+      console.error('Failed to delete project:', error);
+      alert('Failed to delete project. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleRemoveImage = async (imageUrl: string, target: "map" | "price") => {
+    try {
+      // Try to delete from storage if it's a storage URL
+      if (imageUrl.includes('supabase')) {
+        const path = imageUrl.split('/').pop();
+        if (path) {
+          await deleteImageFromStorage(path);
+        }
+      }
+      
+      // Remove from form state
+      setForm((prev) => ({
+        ...prev,
+        [target === "map" ? "mapImages" : "priceListImages"]: (
+          target === "map" ? prev.mapImages : prev.priceListImages
+        ).filter(url => url !== imageUrl),
+      }));
+    } catch (error) {
+      console.error('Failed to remove image:', error);
+      // Still remove from form even if storage deletion fails
+      setForm((prev) => ({
+        ...prev,
+        [target === "map" ? "mapImages" : "priceListImages"]: (
+          target === "map" ? prev.mapImages : prev.priceListImages
+        ).filter(url => url !== imageUrl),
+      }));
+    }
   };
 
   return (
@@ -271,15 +359,24 @@ export default function ProjectsManager() {
                         </h4>
                         <div className="mt-3 grid gap-3 grid-cols-2 sm:grid-cols-3">
                           {project.mapImages.map((img, idx) => (
-                            <a
-                              key={idx}
-                              href={img}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="group relative overflow-hidden rounded-xl border border-highlands-900/10 shadow-2xs hover:border-gold-500/40 hover:shadow-md transition-all"
-                            >
-                              <img src={img} alt={`Map ${idx + 1}`} className="h-28 w-full object-cover sm:h-36" />
-                            </a>
+                            <div key={idx} className="group relative overflow-hidden rounded-xl border border-highlands-900/10 shadow-2xs hover:border-gold-500/40 hover:shadow-md transition-all">
+                              <a
+                                href={img}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block"
+                              >
+                                <img src={img} alt={`Map ${idx + 1}`} className="h-28 w-full object-cover sm:h-36" />
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveImage(img, 'map')}
+                                className="absolute top-2 right-2 grid h-6 w-6 place-items-center rounded-full bg-rose-500 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-rose-600"
+                                title="Remove image"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -292,15 +389,24 @@ export default function ProjectsManager() {
                         </h4>
                         <div className="mt-3 grid gap-3 grid-cols-2 sm:grid-cols-3">
                           {project.priceListImages.map((img, idx) => (
-                            <a
-                              key={idx}
-                              href={img}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="group relative overflow-hidden rounded-xl border border-highlands-900/10 shadow-2xs hover:border-gold-500/40 hover:shadow-md transition-all"
-                            >
-                              <img src={img} alt={`Price ${idx + 1}`} className="h-28 w-full object-cover sm:h-36" />
-                            </a>
+                            <div key={idx} className="group relative overflow-hidden rounded-xl border border-highlands-900/10 shadow-2xs hover:border-gold-500/40 hover:shadow-md transition-all">
+                              <a
+                                href={img}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block"
+                              >
+                                <img src={img} alt={`Price ${idx + 1}`} className="h-28 w-full object-cover sm:h-36" />
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveImage(img, 'price')}
+                                className="absolute top-2 right-2 grid h-6 w-6 place-items-center rounded-full bg-rose-500 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-rose-600"
+                                title="Remove image"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -316,12 +422,12 @@ export default function ProjectsManager() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          if (window.confirm(`Delete "${project.name}"?`)) deleteProjectFile(project.id);
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                        onClick={() => handleDeleteProject(project)}
+                        disabled={isUploading}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Trash2 className="h-3 w-3" /> Delete
+                        {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                        {isUploading ? 'Deleting...' : 'Delete'}
                       </button>
                     </div>
                   </div>
