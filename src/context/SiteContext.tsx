@@ -1148,7 +1148,13 @@ export function SiteProvider({ children }: { children: ReactNode }) {
 
   const addProjectFile = (p: Omit<ProjectFile, "id" | "createdAt" | "updatedAt">) => {
     const now = new Date().toISOString();
-    const full: ProjectFile = { ...p, id: `proj-${Date.now()}`, createdAt: now, updatedAt: now };
+    const full: ProjectFile = normalizeProject({
+      ...p,
+      inventory: p.inventory || [],
+      id: `proj-${Date.now()}`,
+      createdAt: now,
+      updatedAt: now,
+    });
     setProjectFiles((prev) => [full, ...prev]);
   };
 
@@ -1189,11 +1195,13 @@ export function SiteProvider({ children }: { children: ReactNode }) {
   const exportBackup = () => {
     const backup = {
       app: "tagaytay-highlands-by-jewel",
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       properties,
       settings,
       leads,
+      reviews,
+      projects: projectFiles,
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -1215,6 +1223,8 @@ export function SiteProvider({ children }: { children: ReactNode }) {
       }
       if (Array.isArray(data.properties)) setProperties(data.properties);
       if (Array.isArray(data.leads)) setLeads(data.leads);
+      if (Array.isArray(data.reviews)) setReviews(data.reviews);
+      if (Array.isArray(data.projects)) setProjectFiles(data.projects.map(normalizeProject));
       if (data.settings) {
         setSettings((prev) => ({
           ...prev,
