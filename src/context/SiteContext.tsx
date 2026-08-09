@@ -13,6 +13,7 @@ import {
   PROPERTIES_TABLE,
   REVIEWS_TABLE,
   SITE_SETTINGS_TABLE,
+  PROJECTS_TABLE,
   mergeSnapshot,
   loadSharedSnapshot,
   saveSharedSnapshot,
@@ -21,6 +22,15 @@ import {
   type CloudConfig,
 } from "@/utils/cloudSync";
 import { supabase } from "@/lib/supabase";
+import { normalizePaymentTerm } from "@/utils/paymentComputation";
+
+function normalizeProject(project: ProjectFile): ProjectFile {
+  return {
+    ...project,
+    inventory: project.inventory || [],
+    paymentTerms: (project.paymentTerms || []).map((term) => normalizePaymentTerm(term)),
+  };
+}
 
 export type PropertyCategory = "Lot" | "Condo" | "Townhouse";
 
@@ -90,18 +100,46 @@ export type SiteReview = {
   approved: boolean; // Jewel can moderate from the portal
 };
 
+export type PaymentBalanceType =
+  | "monthly"
+  | "lumpsum"
+  | "turnover"
+  | "lumpsum_or_turnover";
+
 export type PaymentTerm = {
   id: string;
   label: string;
-  cashDiscountPercent: number;
+  isPreset?: boolean;
   termDiscountPercent: number;
-  promoDiscountPercent: number;
   extraDiscountPercent: number;
   otherChargesPercent: number;
   spotPercent: number;
+  balanceType: PaymentBalanceType;
   balanceMonths: number;
+  interestRate: number;
   reservationFee: number;
   notes: string;
+  conditions?: string;
+  /** @deprecated Legacy field — ignored; use runtime promo discount at computation */
+  cashDiscountPercent?: number;
+  /** @deprecated Legacy field — ignored; use runtime promo discount at computation */
+  promoDiscountPercent?: number;
+};
+
+export type InventoryUnitStatus = "Available" | "Reserved" | "Hold" | "Sold" | "Not for Sale";
+
+export type InventoryUnit = {
+  id: string;
+  kind: "lot" | "unit";
+  block?: string;
+  lot?: string;
+  unitNumber?: string;
+  area: string;
+  status: InventoryUnitStatus;
+  tcp: number;
+  remarks: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type ProjectFile = {
@@ -115,6 +153,7 @@ export type ProjectFile = {
   mapImages: string[];
   priceListImages: string[];
   paymentTerms: PaymentTerm[];
+  inventory: InventoryUnit[];
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -780,7 +819,8 @@ export function SiteProvider({ children }: { children: ReactNode }) {
   const [projectFiles, setProjectFiles] = useState<ProjectFile[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.PROJECTS);
-      return saved ? JSON.parse(saved) : [];
+      const parsed: ProjectFile[] = saved ? JSON.parse(saved) : [];
+      return parsed.map(normalizeProject);
     } catch {
       return [];
     }
@@ -820,6 +860,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     setProperties(snapshot.properties || INITIAL_PROPERTIES);
     setLeads(snapshot.leads || INITIAL_LEADS);
     setReviews(snapshot.reviews || INITIAL_REVIEWS);
+    setProjectFiles((snapshot.projects || []).map(normalizeProject));
     setSettings((prev) => ({ ...prev, ...mergeSnapshot(snapshot, prev) }));
     lastRemoteUpdatedAtRef.current = snapshot.updatedAt;
     setLastSyncedAt(snapshot.updatedAt);
@@ -829,7 +870,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
   };
 
   const pushSharedState = async (
-    snapshot = buildSnapshot(properties, settings, leads, reviews),
+    snapshot = buildSnapshot(properties, settings, leads, reviews, projectFiles),
   ): Promise<{ ok: boolean; message: string }> => {
     if (hydratingRef.current) {
       return { ok: false, message: "Hydrating shared state, try again in a moment." };
@@ -890,7 +931,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
       if (pushTimer.current) window.clearTimeout(pushTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [properties, settings, leads, reviews]);
+  }, [properties, settings, leads, reviews, projectFiles]);
 
   // On mount: hydrate from the shared Supabase row, then keep refreshing for newer edits.
   useEffect(() => {
@@ -947,6 +988,9 @@ export function SiteProvider({ children }: { children: ReactNode }) {
         void refreshRemoteState();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: OWNERSHIP_TIERS_TABLE }, () => {
+        void refreshRemoteState();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: PROJECTS_TABLE }, () => {
         void refreshRemoteState();
       })
       .subscribe();
