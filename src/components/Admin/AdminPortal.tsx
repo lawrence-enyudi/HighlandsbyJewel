@@ -48,8 +48,10 @@ import {
   UploadCloud,
   RefreshCw,
   CheckCircle2,
+  FileSpreadsheet,
 } from "lucide-react";
 import { cn } from "@/utils/cn";
+import ProjectsManager from "./ProjectsManager";
 
 const PHOTO_PRESETS = [
   {
@@ -228,7 +230,7 @@ export default function AdminPortal() {
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    "leads" | "reviews" | "properties" | "communities" | "terms" | "about" | "content" | "media" | "tripping" | "cloud" | "security"
+    "leads" | "reviews" | "projects" | "properties" | "communities" | "terms" | "about" | "content" | "media" | "tripping" | "cloud" | "security"
   >("leads");
 
   // Property modal state
@@ -670,6 +672,11 @@ export default function AdminPortal() {
                   icon: MessageSquare,
                 },
                 {
+                  id: "projects",
+                  label: "Projects & Maps",
+                  icon: FileSpreadsheet,
+                },
+                {
                   id: "properties",
                   label: "Properties & Promos",
                   badge: properties.length,
@@ -967,6 +974,9 @@ export default function AdminPortal() {
                   </div>
                 </div>
               )}
+
+              {/* TAB: PROJECTS, MAPS & COMPUTATIONS */}
+              {activeTab === "projects" && <ProjectsManager />}
 
               {/* TAB 2: PROPERTIES & PROMOS */}
               {activeTab === "properties" && (

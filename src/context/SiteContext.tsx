@@ -90,6 +90,36 @@ export type SiteReview = {
   approved: boolean; // Jewel can moderate from the portal
 };
 
+export type PaymentTerm = {
+  id: string;
+  label: string;
+  cashDiscountPercent: number;
+  termDiscountPercent: number;
+  promoDiscountPercent: number;
+  extraDiscountPercent: number;
+  otherChargesPercent: number;
+  spotPercent: number;
+  balanceMonths: number;
+  reservationFee: number;
+  notes: string;
+};
+
+export type ProjectFile = {
+  id: string;
+  name: string;
+  district: string;
+  category: "Lot" | "Condo" | "Townhouse";
+  status: "Active" | "Sold Out" | "Pre-Selling" | "Archived";
+  priceRange: string;
+  lotSizes: string;
+  mapImages: string[];
+  priceListImages: string[];
+  paymentTerms: PaymentTerm[];
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type OwnershipTier = {
   id: string;
   name: string;
@@ -712,6 +742,10 @@ type SiteContextType = {
   addReview: (r: Omit<SiteReview, "id" | "createdAt" | "approved">) => void;
   deleteReview: (id: string) => void;
   toggleReviewApproval: (id: string) => void;
+  projectFiles: ProjectFile[];
+  addProjectFile: (p: Omit<ProjectFile, "id" | "createdAt" | "updatedAt">) => void;
+  updateProjectFile: (id: string, p: Partial<ProjectFile>) => void;
+  deleteProjectFile: (id: string) => void;
   resetAllToDefault: () => void;
   openSiteTrippingModal: (prefillCategory?: "All" | "Lots" | "Condos" | "Townhouses" | string) => void;
   closeSiteTrippingModal: () => void;
@@ -731,6 +765,7 @@ const SiteContext = createContext<SiteContextType | null>(null);
 
 const STORAGE_KEYS = {
   AUTH: "tagaytay_highlands_jewel_auth",
+  PROJECTS: "tagaytay_highlands_jewel_projects",
 };
 
 export function SiteProvider({ children }: { children: ReactNode }) {
@@ -741,6 +776,15 @@ export function SiteProvider({ children }: { children: ReactNode }) {
   const [leads, setLeads] = useState<SiteTrippingLead[]>(INITIAL_LEADS);
 
   const [reviews, setReviews] = useState<SiteReview[]>(INITIAL_REVIEWS);
+
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.PROJECTS);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [adminRole, setAdminRole] = useState<AdminRole>(() => {
@@ -759,6 +803,10 @@ export function SiteProvider({ children }: { children: ReactNode }) {
   });
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<"idle" | "syncing" | "error">("idle");
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projectFiles));
+  }, [projectFiles]);
 
   const pushTimer = useRef<number | null>(null);
   const hydratingRef = useRef(false);
@@ -1054,11 +1102,31 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  const addProjectFile = (p: Omit<ProjectFile, "id" | "createdAt" | "updatedAt">) => {
+    const now = new Date().toISOString();
+    const full: ProjectFile = { ...p, id: `proj-${Date.now()}`, createdAt: now, updatedAt: now };
+    setProjectFiles((prev) => [full, ...prev]);
+  };
+
+  const updateProjectFile = (id: string, updated: Partial<ProjectFile>) => {
+    setProjectFiles((prev) =>
+      prev.map((p) =>
+        p.id === id ? { ...p, ...updated, updatedAt: new Date().toISOString() } : p,
+      ),
+    );
+  };
+
+  const deleteProjectFile = (id: string) => {
+    setProjectFiles((prev) => prev.filter((p) => p.id !== id));
+  };
+
   const resetAllToDefault = () => {
     setProperties(INITIAL_PROPERTIES);
     setSettings(INITIAL_SETTINGS);
     setLeads(INITIAL_LEADS);
     setReviews(INITIAL_REVIEWS);
+    setProjectFiles([]);
+    localStorage.removeItem(STORAGE_KEYS.PROJECTS);
   };
 
   const openSiteTrippingModal = (prefillCategory?: string) => {
@@ -1143,6 +1211,10 @@ export function SiteProvider({ children }: { children: ReactNode }) {
         addReview,
         deleteReview,
         toggleReviewApproval,
+        projectFiles,
+        addProjectFile,
+        updateProjectFile,
+        deleteProjectFile,
         resetAllToDefault,
         openSiteTrippingModal,
         closeSiteTrippingModal,
