@@ -114,6 +114,10 @@ export type PaymentTerm = {
   extraDiscountPercent: number;
   otherChargesPercent: number;
   spotPercent: number;
+  /** Percentage of DP to be spread over N months (Deferred DP) */
+  dpSpreadPercent?: number;
+  /** Number of months to spread the deferred DP */
+  dpSpreadMonths?: number;
   balanceType: PaymentBalanceType;
   balanceMonths: number;
   interestRate: number;

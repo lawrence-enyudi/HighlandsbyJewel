@@ -85,6 +85,27 @@ export default function PaymentSchemeEditor({ terms, onChange }: PaymentSchemeEd
                   />
                 </div>
                 <div>
+                  <label className="text-[10px] font-bold uppercase text-highlands-900">Deferred DP %</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={term.dpSpreadPercent || 0}
+                    onChange={(e) => updateTerm(term.id, { dpSpreadPercent: Number(e.target.value) })}
+                    className="mt-1 w-full rounded-lg border border-highlands-900/15 bg-white px-3 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-highlands-900">DP Months</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={term.dpSpreadMonths || 0}
+                    onChange={(e) => updateTerm(term.id, { dpSpreadMonths: Number(e.target.value) })}
+                    className="mt-1 w-full rounded-lg border border-highlands-900/15 bg-white px-3 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
                   <label className="text-[10px] font-bold uppercase text-highlands-900">Balance Type</label>
                   <select
                     value={term.balanceType}

@@ -110,8 +110,9 @@ function balanceDueDate(
   startDate: Date,
   spotAmount: number,
   turnoverDate?: Date | null,
+  dpSpreadMonths: number = 0,
 ): string {
-  const monthOffset = spotAmount > 0 ? 2 : 1;
+  const monthOffset = (spotAmount > 0 ? 1 : 0) + dpSpreadMonths + 1;
   switch (term.balanceType) {
     case "lumpsum":
       return term.balanceMonths > 0
@@ -149,15 +150,32 @@ export function computePayment(params: ComputationParams): ComputedResult {
 
   const reservationFee = term.reservationFee || 100000;
   const afterReservation = totalContractPrice - reservationFee;
+  
   const spotAmount = afterReservation * (term.spotPercent / 100);
-  const balanceAmount = afterReservation - spotAmount;
+  const dpSpreadPercent = term.dpSpreadPercent || 0;
+  const dpSpreadAmount = afterReservation * (dpSpreadPercent / 100);
+  const dpSpreadMonths = term.dpSpreadMonths || 0;
+  const dpSpreadMonthly = dpSpreadMonths > 0 ? dpSpreadAmount / dpSpreadMonths : 0;
+
+  const balanceAmount = Math.max(0, afterReservation - spotAmount - dpSpreadAmount);
   const months = term.balanceMonths || 0;
-  const monthlyAmount =
-    term.balanceType === "monthly" && months > 0 ? balanceAmount / months : 0;
+  const interestRate = term.interestRate || 0;
+
+  let monthlyAmount = 0;
+  if (term.balanceType === "monthly" && months > 0) {
+    if (interestRate > 0) {
+      // Standard PMT formula for monthly interest
+      const monthlyRate = interestRate / 12 / 100;
+      monthlyAmount = (balanceAmount * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -months));
+    } else {
+      monthlyAmount = balanceAmount / months;
+    }
+  }
 
   const schedule: ComputedSchedule[] = [];
   let outstanding = totalContractPrice;
 
+  // 1. Reservation
   outstanding -= reservationFee;
   schedule.push({
     paymentNo: 0,
@@ -167,26 +185,43 @@ export function computePayment(params: ComputationParams): ComputedResult {
     outstandingBalance: outstanding,
   });
 
+  let currentMonthOffset = 1;
+  let nextPaymentNo = 1;
+
+  // 2. Spot DP
   if (spotAmount > 0) {
     outstanding -= spotAmount;
     schedule.push({
-      paymentNo: 1,
-      dateDue: formatDate(addMonths(startDate, 1)),
+      paymentNo: nextPaymentNo++,
+      dateDue: formatDate(addMonths(startDate, currentMonthOffset++)),
       particulars: term.spotPercent === 100 ? "Spot Cash" : "Spot DP",
       amountDue: spotAmount,
       outstandingBalance: Math.max(0, outstanding),
     });
   }
 
+  // 3. Stretched / Deferred DP
+  if (dpSpreadAmount > 0 && dpSpreadMonths > 0) {
+    for (let i = 0; i < dpSpreadMonths; i++) {
+      outstanding -= dpSpreadMonthly;
+      schedule.push({
+        paymentNo: nextPaymentNo++,
+        dateDue: formatDate(addMonths(startDate, currentMonthOffset++)),
+        particulars: dpSpreadMonths === 1 ? "Deferred DP" : `Deferred DP ${i + 1}/${dpSpreadMonths}`,
+        amountDue: dpSpreadMonthly,
+        outstandingBalance: Math.max(0, outstanding),
+      });
+    }
+  }
+
+  // 4. Balance (Monthly or Lumpsum)
   if (balanceAmount > 0) {
     if (term.balanceType === "monthly" && months > 0 && monthlyAmount > 0) {
-      const startIdx = spotAmount > 0 ? 2 : 1;
-      const monthOffset = spotAmount > 0 ? 2 : 1;
       for (let i = 0; i < months; i++) {
         outstanding -= monthlyAmount;
         schedule.push({
-          paymentNo: startIdx + i,
-          dateDue: formatDate(addMonths(startDate, monthOffset + i)),
+          paymentNo: nextPaymentNo++,
+          dateDue: formatDate(addMonths(startDate, currentMonthOffset++)),
           particulars: `MA-${i + 1}`,
           amountDue: monthlyAmount,
           outstandingBalance: Math.max(0, outstanding),
@@ -195,8 +230,8 @@ export function computePayment(params: ComputationParams): ComputedResult {
     } else {
       outstanding -= balanceAmount;
       schedule.push({
-        paymentNo: spotAmount > 0 ? 2 : 1,
-        dateDue: balanceDueDate(term, startDate, spotAmount, turnoverDate),
+        paymentNo: nextPaymentNo++,
+        dateDue: balanceDueDate(term, startDate, spotAmount, turnoverDate, dpSpreadMonths),
         particulars: balanceParticulars(term, turnoverDate),
         amountDue: balanceAmount,
         outstandingBalance: Math.max(0, outstanding),
@@ -230,6 +265,8 @@ export function normalizePaymentTerm(term: PaymentTerm): PaymentTerm {
     interestRate: term.interestRate ?? 0,
     isPreset: term.isPreset ?? false,
     conditions: term.conditions ?? "",
+    dpSpreadPercent: term.dpSpreadPercent ?? 0,
+    dpSpreadMonths: term.dpSpreadMonths ?? 0,
   };
 }
 
@@ -241,6 +278,8 @@ export const PRESET_PAYMENT_TERMS: Omit<PaymentTerm, "id">[] = [
     extraDiscountPercent: 0,
     otherChargesPercent: 5,
     spotPercent: 100,
+    dpSpreadPercent: 0,
+    dpSpreadMonths: 0,
     balanceType: "lumpsum",
     balanceMonths: 0,
     interestRate: 0,
@@ -255,6 +294,8 @@ export const PRESET_PAYMENT_TERMS: Omit<PaymentTerm, "id">[] = [
     extraDiscountPercent: 0,
     otherChargesPercent: 5,
     spotPercent: 50,
+    dpSpreadPercent: 0,
+    dpSpreadMonths: 0,
     balanceType: "monthly",
     balanceMonths: 60,
     interestRate: 0,
@@ -269,6 +310,8 @@ export const PRESET_PAYMENT_TERMS: Omit<PaymentTerm, "id">[] = [
     extraDiscountPercent: 0,
     otherChargesPercent: 5,
     spotPercent: 20,
+    dpSpreadPercent: 0,
+    dpSpreadMonths: 0,
     balanceType: "monthly",
     balanceMonths: 60,
     interestRate: 0,
@@ -277,12 +320,46 @@ export const PRESET_PAYMENT_TERMS: Omit<PaymentTerm, "id">[] = [
     conditions: "",
   },
   {
+    label: "20% DP in 24 months / 80% Lumpsum",
+    isPreset: true,
+    termDiscountPercent: 2,
+    extraDiscountPercent: 0,
+    otherChargesPercent: 5,
+    spotPercent: 0,
+    dpSpreadPercent: 20,
+    dpSpreadMonths: 24,
+    balanceType: "lumpsum",
+    balanceMonths: 1,
+    interestRate: 0,
+    reservationFee: 100000,
+    notes: "",
+    conditions: "Deferred DP scheme",
+  },
+  {
+    label: "10% Spot / 10% in 12 months / 80% Bank",
+    isPreset: true,
+    termDiscountPercent: 3,
+    extraDiscountPercent: 0,
+    otherChargesPercent: 5,
+    spotPercent: 10,
+    dpSpreadPercent: 10,
+    dpSpreadMonths: 12,
+    balanceType: "lumpsum",
+    balanceMonths: 1,
+    interestRate: 0,
+    reservationFee: 100000,
+    notes: "",
+    conditions: "Split DP scheme",
+  },
+  {
     label: "100% in 60 months (No DP)",
     isPreset: true,
     termDiscountPercent: 1,
     extraDiscountPercent: 0,
     otherChargesPercent: 5,
     spotPercent: 0,
+    dpSpreadPercent: 0,
+    dpSpreadMonths: 0,
     balanceType: "monthly",
     balanceMonths: 60,
     interestRate: 0,
@@ -301,6 +378,8 @@ export function createPaymentTerm(overrides: Partial<Omit<PaymentTerm, "id">> = 
     extraDiscountPercent: 0,
     otherChargesPercent: 5,
     spotPercent: 20,
+    dpSpreadPercent: 0,
+    dpSpreadMonths: 0,
     balanceType: "monthly",
     balanceMonths: 60,
     interestRate: 0,
